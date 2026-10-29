@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: vault
+          POSTGRES_PASSWORD: vault
+          POSTGRES_DB: vaultcrm
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U vault -d vaultcrm"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: 5432
+      PGUSER: vault
+      PGPASSWORD: vault
+      PGDATABASE: vaultcrm
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Load schema
+        run: psql -v ON_ERROR_STOP=1 -f init.sql
+      - run: npm install --no-audit --no-fund
+      - name: Syntax check
+        run: node --check server.js
+      - name: Tests
+        run: npm test
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Docker image builds
+        run: docker build -t vaultcrm .

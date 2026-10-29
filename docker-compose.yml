@@ -1,0 +1,69 @@
+# VaultCRM — sized for a 1 vCPU / 2 GB box.
+# Budget: Postgres 1.0g + Node 384m = ~1.4g, leaving headroom for the OS.
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${PGUSER:-vault}
+      POSTGRES_PASSWORD: ${PGPASSWORD:?Set PGPASSWORD in .env}
+      POSTGRES_DB: ${PGDATABASE:-vaultcrm}
+    # Tuned for ~1 GB container memory
+    command:
+      - postgres
+      - -c
+      - shared_buffers=192MB
+      - -c
+      - effective_cache_size=512MB
+      - -c
+      - work_mem=4MB
+      - -c
+      - maintenance_work_mem=64MB
+      - -c
+      - max_connections=20
+      - -c
+      - max_worker_processes=2
+      - -c
+      - max_parallel_workers=1
+      - -c
+      - max_parallel_workers_per_gather=0
+      - -c
+      - wal_buffers=4MB
+      - -c
+      - random_page_cost=1.1
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-vault} -d ${PGDATABASE:-vaultcrm}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    mem_limit: 1g
+    memswap_limit: 1g
+    cpus: 0.7
+    shm_size: 128m
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 3000
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${PGUSER:-vault}
+      PGPASSWORD: ${PGPASSWORD}
+      PGDATABASE: ${PGDATABASE:-vaultcrm}
+      PG_POOL_MAX: 5
+      API_KEY: ${API_KEY:-}
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    mem_limit: 384m
+    memswap_limit: 384m
+    cpus: 0.5
+
+volumes:
+  pgdata:

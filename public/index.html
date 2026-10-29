@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VaultCRM</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  body { font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .tab-active { background:#0f172a; color:#fff; }
+  .grid-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+  td, th { white-space:nowrap; }
+</style>
+</head>
+<body class="bg-slate-100 text-slate-900 min-h-screen">
+
+<header class="bg-slate-900 text-white">
+  <div class="max-w-6xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-3">
+    <div>
+      <h1 class="text-xl font-bold tracking-tight">VaultCRM</h1>
+      <p class="text-xs text-slate-300">Low-code JSONB engine</p>
+    </div>
+    <div class="flex items-center gap-2">
+      <input id="apiKey" type="password" placeholder="API key (if set)" class="text-sm rounded px-2 py-1 text-slate-900 w-40">
+      <span id="health" class="text-xs px-2 py-1 rounded bg-slate-700">checking…</span>
+    </div>
+  </div>
+</header>
+
+<nav class="max-w-6xl mx-auto px-4 mt-4 flex gap-2">
+  <button data-tab="schema" class="tab px-4 py-2 rounded-lg text-sm font-semibold bg-white shadow">Schema</button>
+  <button data-tab="form" class="tab px-4 py-2 rounded-lg text-sm font-semibold bg-white shadow">Add Record</button>
+  <button data-tab="grid" class="tab px-4 py-2 rounded-lg text-sm font-semibold bg-white shadow">Data Grid</button>
+</nav>
+
+<main class="max-w-6xl mx-auto px-4 py-4 space-y-4">
+
+  <!-- ============ SCHEMA WORKSPACE ============ -->
+  <section id="tab-schema" class="panel bg-white rounded-xl shadow p-4 space-y-4">
+    <h2 class="text-lg font-bold">Build a Table</h2>
+    <div class="grid sm:grid-cols-2 gap-3">
+      <label class="block text-sm">App name
+        <input id="appName" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Sales">
+      </label>
+      <label class="block text-sm">Table name
+        <input id="tableName" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="Contacts">
+      </label>
+    </div>
+
+    <div>
+      <div class="flex items-center justify-between mb-2">
+        <h3 class="font-semibold text-sm">Fields</h3>
+        <button id="addField" class="text-sm bg-slate-200 hover:bg-slate-300 rounded-lg px-3 py-1">+ Add field</button>
+      </div>
+      <div id="fieldRows" class="space-y-2"></div>
+    </div>
+
+    <div class="flex flex-wrap gap-2 items-center">
+      <button id="saveSchema" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2">Save table</button>
+      <span id="schemaMsg" class="text-sm"></span>
+    </div>
+
+    <div>
+      <h3 class="font-semibold text-sm mb-2">Existing tables</h3>
+      <div id="tableList" class="grid sm:grid-cols-2 lg:grid-cols-3 gap-2"></div>
+    </div>
+  </section>
+
+  <!-- ============ FORM WORKSPACE ============ -->
+  <section id="tab-form" class="panel bg-white rounded-xl shadow p-4 space-y-4 hidden">
+    <h2 class="text-lg font-bold">Add a Record</h2>
+    <label class="block text-sm">Table
+      <select id="formTable" class="tableSelect mt-1 w-full border rounded-lg px-3 py-2"></select>
+    </label>
+    <form id="recordForm" class="grid sm:grid-cols-2 gap-3"></form>
+    <div class="flex flex-wrap gap-2 items-center">
+      <button id="submitRecord" class="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-lg px-4 py-2">Save record</button>
+      <span id="formMsg" class="text-sm"></span>
+    </div>
+  </section>
+
+  <!-- ============ GRID WORKSPACE ============ -->
+  <section id="tab-grid" class="panel bg-white rounded-xl shadow p-4 space-y-4 hidden">
+    <h2 class="text-lg font-bold">Data Grid</h2>
+    <div class="grid sm:grid-cols-4 gap-3 items-end">
+      <label class="block text-sm sm:col-span-1">Table
+        <select id="gridTable" class="tableSelect mt-1 w-full border rounded-lg px-3 py-2"></select>
+      </label>
+      <label class="block text-sm">Filter field
+        <select id="filterField" class="mt-1 w-full border rounded-lg px-3 py-2"></select>
+      </label>
+      <label class="block text-sm">Equals
+        <input id="filterValue" class="mt-1 w-full border rounded-lg px-3 py-2" placeholder="value">
+      </label>
+      <button id="runQuery" class="bg-slate-900 hover:bg-slate-700 text-white font-semibold rounded-lg px-4 py-2">Run query</button>
+    </div>
+    <div class="flex items-center justify-between text-sm">
+      <span id="gridMsg" class="text-slate-500"></span>
+      <div class="flex gap-2">
+        <button id="prevPage" class="bg-slate-200 rounded px-3 py-1 disabled:opacity-40">Prev</button>
+        <button id="nextPage" class="bg-slate-200 rounded px-3 py-1 disabled:opacity-40">Next</button>
+      </div>
+    </div>
+    <div class="grid-wrap border rounded-lg">
+      <table class="min-w-full text-sm">
+        <thead id="gridHead" class="bg-slate-100 text-left"></thead>
+        <tbody id="gridBody" class="divide-y"></tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<template id="fieldRowTpl">
+  <div class="fieldRow flex flex-wrap gap-2 items-center">
+    <input class="fName flex-1 min-w-[8rem] border rounded-lg px-3 py-2" placeholder="field_name">
+    <select class="fType border rounded-lg px-3 py-2">
+      <option value="TEXT">Text</option>
+      <option value="NUMBER">Number</option>
+      <option value="DATE">Date</option>
+      <option value="BOOLEAN">Yes / No</option>
+      <option value="REF">Link to table…</option>
+    </select>
+    <select class="fRef border rounded-lg px-3 py-2 hidden"></select>
+    <button class="fDel text-red-600 font-bold px-2" title="Remove">✕</button>
+  </div>
+</template>
+
+<script>
+(() => {
+  const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const el = (tag, props = {}, ...kids) => {
+    const n = document.createElement(tag);
+    Object.entries(props).forEach(([k, v]) => {
+      if (k === 'class') n.className = v; else if (k in n) n[k] = v; else n.setAttribute(k, v);
+    });
+    kids.flat().forEach((k) => n.append(k instanceof Node ? k : document.createTextNode(String(k))));
+    return n;
+  };
+
+  let TABLES = [];
+  const PAGE = 50;
+  let gridOffset = 0;
+
+  // ---------- API ----------
+  try { $('#apiKey').value = localStorage.getItem('vault_api_key') || ''; } catch (_) {}
+  $('#apiKey').addEventListener('change', (e) => {
+    try { localStorage.setItem('vault_api_key', e.target.value); } catch (_) {}
+  });
+  async function api(method, url, body) {
+    const res = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json', 'x-api-key': $('#apiKey').value },
+      body: body ? JSON.stringify(body) : undefined
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      const det = data.details ? ' — ' + [].concat(data.details).join('; ') : '';
+      throw new Error((data.error || res.statusText) + det);
+    }
+    return data;
+  }
+  const msg = (node, text, ok = true) => {
+    node.textContent = text;
+    node.className = 'text-sm ' + (ok ? 'text-emerald-700' : 'text-red-600');
+  };
+
+  // ---------- Tabs ----------
+  function showTab(name) {
+    $$('.panel').forEach((p) => p.classList.toggle('hidden', p.id !== 'tab-' + name));
+    $$('.tab').forEach((t) => t.classList.toggle('tab-active', t.dataset.tab === name));
+  }
+  $$('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+  // ---------- Health ----------
+  api('GET', '/api/health')
+    .then(() => { $('#health').textContent = 'online'; $('#health').className = 'text-xs px-2 py-1 rounded bg-emerald-600'; })
+    .catch(() => { $('#health').textContent = 'offline'; $('#health').className = 'text-xs px-2 py-1 rounded bg-red-600'; });
+
+  // ---------- Tables ----------
+  const label = (t) => `${t.app_name} / ${t.table_name}`;
+  const byId = (id) => TABLES.find((t) => t.id === id);
+
+  async function loadTables(selectId) {
+    const { tables } = await api('GET', '/api/registry/list');
+    TABLES = tables;
+    // existing-table cards
+    const list = $('#tableList');
+    list.replaceChildren(...(tables.length ? tables.map((t) =>
+      el('div', { class: 'border rounded-lg p-3 text-sm' },
+        el('div', { class: 'font-semibold' }, label(t)),
+        el('div', { class: 'text-slate-500 text-xs mb-1' }, `${t.record_count} records`),
+        el('div', { class: 'text-xs text-slate-600 break-words' },
+          Object.entries(t.fields_schema).map(([k, v]) => `${k}: ${prettyType(v)}`).join(' · '))
+      )) : [el('p', { class: 'text-sm text-slate-500' }, 'No tables yet.')]));
+    // dropdowns
+    $$('.tableSelect').forEach((sel) => {
+      const keep = selectId || sel.value;
+      sel.replaceChildren(...tables.map((t) => el('option', { value: t.id }, label(t))));
+      if (keep && byId(keep)) sel.value = keep;
+    });
+    $$('.fRef').forEach(fillRefSelect);
+    renderForm();
+    renderFilterFields();
+  }
+  const prettyType = (t) => t.startsWith('REF:') ? `→ ${byId(t.slice(4)) ? byId(t.slice(4)).table_name : 'link'}` : t;
+
+  // ---------- Schema builder ----------
+  function fillRefSelect(sel) {
+    const cur = sel.value;
+    sel.replaceChildren(...TABLES.map((t) => el('option', { value: t.id }, label(t))));
+    if (cur) sel.value = cur;
+  }
+  function addFieldRow(name = '', type = 'TEXT') {
+    const row = $('#fieldRowTpl').content.firstElementChild.cloneNode(true);
+    $('.fName', row).value = name;
+    $('.fType', row).value = type;
+    fillRefSelect($('.fRef', row));
+    $('.fType', row).addEventListener('change', (e) => {
+      $('.fRef', row).classList.toggle('hidden', e.target.value !== 'REF');
+    });
+    $('.fDel', row).addEventListener('click', (e) => { e.preventDefault(); row.remove(); });
+    $('#fieldRows').append(row);
+  }
+  $('#addField').addEventListener('click', () => addFieldRow());
+  addFieldRow('first_name', 'TEXT');
+
+  $('#saveSchema').addEventListener('click', async () => {
+    const out = $('#schemaMsg');
+    const fields_schema = {};
+    for (const row of $$('.fieldRow')) {
+      const n = $('.fName', row).value.trim();
+      if (!n) continue;
+      const t = $('.fType', row).value;
+      if (t === 'REF') {
+        const target = $('.fRef', row).value;
+        if (!target) return msg(out, `Pick a target table for "${n}"`, false);
+        fields_schema[n] = 'REF:' + target;
+      } else fields_schema[n] = t;
+    }
+    try {
+      const r = await api('POST', '/api/registry/create-table', {
+        app_name: $('#appName').value.trim(),
+        table_name: $('#tableName').value.trim(),
+        fields_schema
+      });
+      msg(out, 'Saved. Table ID ' + r.registry_id);
+      $('#tableName').value = '';
+      $('#fieldRows').replaceChildren(); addFieldRow();
+      await loadTables(r.registry_id);
+    } catch (e) { msg(out, e.message, false); }
+  });
+
+  // ---------- Dynamic form ----------
+  const refCache = {};
+  async function refOptions(targetId) {
+    if (!refCache[targetId]) {
+      const r = await api('POST', '/api/vault/query-records', { registry_id: targetId, limit: 500 });
+      refCache[targetId] = r.records;
+    }
+    return refCache[targetId];
+  }
+  const recLabel = (rec) => {
+    const vals = Object.values(rec.payload).filter((v) => typeof v === 'string' && v.length < 60);
+    return (vals.slice(0, 2).join(' ') || rec.id.slice(0, 8));
+  };
+
+  async function renderForm() {
+    const form = $('#recordForm');
+    const t = byId($('#formTable').value);
+    if (!t) { form.replaceChildren(el('p', { class: 'text-sm text-slate-500' }, 'Create a table first.')); return; }
+    const blocks = [];
+    for (const [name, type] of Object.entries(t.fields_schema)) {
+      let input;
+      if (type === 'NUMBER') input = el('input', { type: 'number', step: 'any', name });
+      else if (type === 'DATE') input = el('input', { type: 'date', name });
+      else if (type === 'BOOLEAN') input = el('select', { name }, el('option', { value: '' }, '—'), el('option', { value: 'true' }, 'Yes'), el('option', { value: 'false' }, 'No'));
+      else if (type.startsWith('REF:')) {
+        input = el('select', { name }, el('option', { value: '' }, '— none —'));
+        try {
+          (await refOptions(type.slice(4))).forEach((r) => input.append(el('option', { value: r.id }, recLabel(r))));
+        } catch (_) {}
+      } else input = el('input', { type: 'text', name });
+      input.className = 'mt-1 w-full border rounded-lg px-3 py-2';
+      input.dataset.type = type;
+      blocks.push(el('label', { class: 'block text-sm' }, `${name} `, el('span', { class: 'text-xs text-slate-400' }, prettyType(type)), input));
+    }
+    form.replaceChildren(...blocks);
+  }
+  $('#formTable').addEventListener('change', renderForm);
+  $('#recordForm').addEventListener('submit', (e) => e.preventDefault());
+
+  $('#submitRecord').addEventListener('click', async () => {
+    const out = $('#formMsg');
+    const registry_id = $('#formTable').value;
+    const payload = {};
+    $$('#recordForm [name]').forEach((inp) => {
+      if (inp.value === '') return;
+      const t = inp.dataset.type;
+      payload[inp.name] = t === 'NUMBER' ? Number(inp.value) : t === 'BOOLEAN' ? inp.value === 'true' : inp.value;
+    });
+    try {
+      await api('POST', '/api/vault/insert-record', { registry_id, payload });
+      msg(out, 'Record saved.');
+      $('#recordForm').reset();
+      Object.keys(refCache).forEach((k) => delete refCache[k]);
+      loadTables();
+    } catch (e) { msg(out, e.message, false); }
+  });
+
+  // ---------- Grid ----------
+  function renderFilterFields() {
+    const t = byId($('#gridTable').value);
+    const sel = $('#filterField');
+    sel.replaceChildren(el('option', { value: '' }, '(no filter)'),
+      ...(t ? Object.keys(t.fields_schema).map((k) => el('option', { value: k }, k)) : []));
+  }
+  $('#gridTable').addEventListener('change', () => { gridOffset = 0; renderFilterFields(); runQuery(); });
+
+  async function runQuery() {
+    const t = byId($('#gridTable').value);
+    if (!t) return;
+    const body = { registry_id: t.id, limit: PAGE, offset: gridOffset, expand: true };
+    if ($('#filterField').value) { body.filterField = $('#filterField').value; body.filterValue = $('#filterValue').value; }
+    try {
+      const r = await api('POST', '/api/vault/query-records', body);
+      const cols = Object.keys(t.fields_schema);
+      $('#gridHead').replaceChildren(el('tr', {},
+        ...cols.map((c) => el('th', { class: 'px-3 py-2 font-semibold' }, c)),
+        el('th', { class: 'px-3 py-2 font-semibold' }, 'created'),
+        el('th', { class: 'px-3 py-2' }, '')));
+      $('#gridBody').replaceChildren(...(r.records.length ? r.records.map((rec) =>
+        el('tr', { class: 'hover:bg-slate-50' },
+          ...cols.map((c) => {
+            let v = rec.payload[c];
+            const type = t.fields_schema[c];
+            if (v !== undefined && type.startsWith('REF:')) v = r.refs[v] ? '→ ' + recLabel(r.refs[v]) : '→ ' + String(v).slice(0, 8);
+            if (type === 'BOOLEAN' && v !== undefined) v = v ? 'Yes' : 'No';
+            return el('td', { class: 'px-3 py-2' }, v === undefined ? '' : String(v)); // textContent = XSS-safe
+          }),
+          el('td', { class: 'px-3 py-2 text-slate-500' }, new Date(rec.date_created).toLocaleString()),
+          el('td', { class: 'px-3 py-2' }, (() => {
+            const b = el('button', { class: 'text-red-600 text-xs' }, 'delete');
+            b.addEventListener('click', async () => {
+              if (!confirm('Delete this record?')) return;
+              try { await api('DELETE', `/api/vault/record/${t.id}/${rec.id}`); runQuery(); loadTables(); }
+              catch (e) { msg($('#gridMsg'), e.message, false); }
+            });
+            return b;
+          })())
+        )) : [el('tr', {}, el('td', { class: 'px-3 py-4 text-slate-500', colSpan: cols.length + 2 }, 'No records.'))]));
+      $('#gridMsg').className = 'text-slate-500';
+      $('#gridMsg').textContent = `Showing ${r.records.length ? gridOffset + 1 : 0}–${gridOffset + r.records.length}`;
+      $('#prevPage').disabled = gridOffset === 0;
+      $('#nextPage').disabled = r.records.length < PAGE;
+    } catch (e) { msg($('#gridMsg'), e.message, false); }
+  }
+  $('#runQuery').addEventListener('click', () => { gridOffset = 0; runQuery(); });
+  $('#prevPage').addEventListener('click', () => { gridOffset = Math.max(0, gridOffset - PAGE); runQuery(); });
+  $('#nextPage').addEventListener('click', () => { gridOffset += PAGE; runQuery(); });
+
+  // ---------- Boot ----------
+  showTab('schema');
+  loadTables().then(runQuery).catch((e) => msg($('#schemaMsg'), e.message, false));
+})();
+</script>
+</body>
+</html>
