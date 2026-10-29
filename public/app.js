@@ -13,6 +13,8 @@
   // DOM helpers
   // ---------------------------------------------------------------------
   const $ = (s, r = document) => r.querySelector(s);
+  const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+  const reduceMotion = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   function el(tag, props = {}, ...kids) {
     const n = document.createElement(tag);
     for (const [k, v] of Object.entries(props || {})) {
@@ -100,7 +102,7 @@
     const dark = isDark();
     $('#themeBtn').replaceChildren(icon(dark ? 'sun' : 'moon'));
     $('#themeBtn').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-    $('meta[name="theme-color"]').setAttribute('content', dark ? '#0E1117' : '#ECEEF2');
+    $('meta[name="theme-color"]').setAttribute('content', dark ? '#09090A' : '#EEEBE6');
   }
   const isDark = () => settings.theme ? settings.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -423,6 +425,8 @@
       else node = await renderTableView(byKey[r.key], r.params);
       if (token !== renderToken) return;
       view.replaceChildren(node);
+      stagger(view);
+      countUp(view);
     } catch (e) {
       if (token !== renderToken) return;
       view.replaceChildren(emptyState('x', 'Couldn’t load this view', e.message, el('button', { class: 'btn', onclick: render }, 'Try again')));
@@ -443,8 +447,9 @@
     const open = all.filter((r) => !DONE.has(r.payload.status));
 
     const now = new Date();
-    const head = el('div', { class: 'page-head reveal' },
-      el('div', {},
+    const head = el('div', { class: 'page-head has-orb reveal' },
+      el('div', { class: 'orb-wrap', 'aria-hidden': 'true' }, el('div', { class: 'orb' }), el('div', { class: 'orb-shadow' })),
+      el('div', { style: 'position:relative;z-index:1' },
         el('div', { class: 'eyebrow' }, now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })),
         el('h1', { class: 'page-title' }, settings.name ? `${settings.name}'s homepage` : 'Homepage')),
       el('div', { class: 'page-actions' },
@@ -454,9 +459,9 @@
     // Tally board — queue buttons with live counts
     const tally = el('div', { class: 'tally' }, settings.queues.map((q) => {
       const n = open.filter((r) => r.payload.queue === q).length;
-      return el('button', { class: 'tally-btn' + (n ? ' live' : ''), onclick: () => go('#/t/projects?queue=' + encodeURIComponent(q)), 'aria-label': `${q}: ${n} open` },
+      return el('button', { class: 'tally-btn' + (n ? ' live' : ''), 'data-tilt': true, onclick: () => go('#/t/projects?queue=' + encodeURIComponent(q)), 'aria-label': `${q}: ${n} open` },
         el('span', { class: 'tally-top' }, el('span', { class: 'led' })),
-        el('span', {}, el('span', { class: 'tally-n' }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, q)));
+        el('span', {}, el('span', { class: 'tally-n', 'data-n': n }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, q)));
     }));
     const queues = el('section', { class: 'card span-12 reveal' },
       el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Queues'),
@@ -473,6 +478,7 @@
         const q = input.value.trim().toLowerCase();
         if (!q) { results.replaceChildren(el('div', { class: 'hint' }, countHint())); return; }
         const hits = cache[key].filter((r) => searchText(s, r).includes(q)).slice(0, 6);
+        setTimeout(() => stagger(results));
         results.replaceChildren(...(hits.length ? hits.map((r) => el('button', { class: 'result', onclick: () => openRecord(s, r) }, icon(s.icon), titleOf(s, r))) :
           [el('button', { class: 'result', onclick: () => openRecord(s, null, { [Object.keys(schemaOf(s))[0]]: input.value.trim() }) }, icon('plus'), `Add “${input.value.trim()}”`)]));
       });
@@ -604,6 +610,7 @@
         rows.length ? gridTable(spec, rows, spec.columns, onSort, st.sort || { field: '' })
           : emptyState('search', 'No matches', 'Try a different search or clear the filters.', el('button', { class: 'btn', onclick: () => { st.q = ''; st.chip = ''; searchInput.value = ''; draw(); syncChips(); } }, 'Clear filters')),
         el('div', { class: 'grid-foot' }, el('span', {}, `Showing ${rows.length} of ${base.length}`), recs.length >= 500 ? el('span', {}, 'First 500 records loaded') : el('span', {}, '')));
+      stagger(body);
     }
     searchInput.addEventListener('input', () => { st.q = searchInput.value; draw(); });
     draw();
@@ -613,7 +620,7 @@
   // Notepad
   function renderNotes(spec, recs) {
     const sorted = recs.slice().sort((a, b) => (b.payload.pinned ? 1 : 0) - (a.payload.pinned ? 1 : 0) || (a.date_modified < b.date_modified ? 1 : -1));
-    return el('div', { class: 'notes reveal' }, sorted.map((r) => el('button', { class: 'note' + (r.payload.pinned ? ' pinned' : ''), onclick: () => openRecord(spec, r) },
+    return el('div', { class: 'notes reveal' }, sorted.map((r) => el('button', { class: 'note' + (r.payload.pinned ? ' pinned' : ''), 'data-tilt': true, onclick: () => openRecord(spec, r) },
       el('h4', {}, r.payload.title || 'Untitled note'),
       r.payload.body ? el('p', {}, r.payload.body) : null,
       el('footer', {}, (r.payload.pinned ? 'Pinned · ' : '') + 'Edited ' + fmtDate(r.date_modified.slice(0, 10))))));
@@ -629,7 +636,7 @@
     const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const byDay = {};
     recs.forEach((r) => { const d = r.payload[dateField]; if (d) (byDay[d.slice(0, 10)] = byDay[d.slice(0, 10)] || []).push(r); });
-    const shift = (n) => { const d = new Date(y, m - 1 + n, 1); st.month = iso(d).slice(0, 7); render(); };
+    const shift = (n) => { const d = new Date(y, m - 1 + n, 1); st.month = iso(d).slice(0, 7); st.flip = n > 0 ? 'flip-next' : 'flip-prev'; render(); };
     const chipField = Object.keys(schemaOf(spec)).find((k) => typeOf(spec, k).base === 'CHOICE');
 
     const head = el('div', { class: 'toolbar reveal' }, el('div', { class: 'cal-head' },
@@ -661,7 +668,8 @@
       el('span', { class: 'cell-mono', style: 'min-width:56px' }, fmtDate(r.payload[dateField])), titleOf(spec, r),
       chipField && r.payload[chipField] ? pill(r.payload[chipField]) : null)) : el('p', { class: 'hint' }, 'Nothing scheduled this month.'));
 
-    return el('div', {}, head, el('div', { class: 'cal reveal' }, dows, cells), agenda);
+    const flip = st.flip || ''; st.flip = '';
+    return el('div', {}, head, el('div', { class: 'cal ' + (flip || 'reveal') }, dows, cells), agenda);
   }
 
   // ---------------------------------------------------------------------
@@ -677,6 +685,7 @@
     lastFocus = document.activeElement;
     $('#drawer').replaceChildren(...content);
     $('#drawerWrap').hidden = false;
+    $$('#drawer .drawer-body > *').forEach((n, i) => n.style.setProperty('--i', Math.min(i, 16)));
     const first = $('#drawer input, #drawer select, #drawer textarea');
     (first || $('#drawer')).focus({ preventScroll: true });
   }
@@ -1084,6 +1093,87 @@
   }
 
   // ---------------------------------------------------------------------
+  // Motion & 3D interaction
+  // ---------------------------------------------------------------------
+  function stagger(root) {
+    const groups = ['.reveal', '.grid tbody tr', '.note', '.result', '.tally-btn'];
+    for (const sel of groups) $$(sel, root).forEach((n, i) => n.style.setProperty('--i', i));
+  }
+  function countUp(root) {
+    $$('.tally-n[data-n]', root).forEach((n) => {
+      const target = Number(n.dataset.n) || 0;
+      if (!target || reduceMotion()) return;
+      const t0 = performance.now(), dur = 900;
+      const step = (t) => {
+        const k = Math.min(1, (t - t0) / dur);
+        const eased = 1 - Math.pow(1 - k, 3);
+        n.textContent = String(Math.round(target * eased)).padStart(2, '0');
+        if (k < 1) requestAnimationFrame(step);
+      };
+      n.textContent = '00';
+      requestAnimationFrame(step);
+    });
+  }
+  function wireMotion() {
+    let raf = 0, lastEvt = null;
+    const frame = () => {
+      raf = 0;
+      const e = lastEvt;
+      if (!e) return;
+      // Marble slab + orb parallax
+      const px = e.clientX / innerWidth - .5, py = e.clientY / innerHeight - .5;
+      document.body.style.setProperty('--px', px.toFixed(3));
+      document.body.style.setProperty('--py', py.toFixed(3));
+      const orb = $('.orb');
+      if (orb) { orb.style.setProperty('--ox', (px * 2).toFixed(3)); orb.style.setProperty('--oy', (py * 2).toFixed(3)); }
+      // Spotlight on the panel under the pointer
+      const card = e.target.closest && e.target.closest('.card');
+      if (card) {
+        const r = card.getBoundingClientRect();
+        card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+        card.style.setProperty('--my', `${e.clientY - r.top}px`);
+      }
+    };
+    document.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch' || reduceMotion()) return;
+      lastEvt = e;
+      if (!raf) raf = requestAnimationFrame(frame);
+    }, { passive: true });
+
+    // 3D tilt with glare on [data-tilt]
+    document.addEventListener('pointermove', (e) => {
+      if (e.pointerType === 'touch' || reduceMotion()) return;
+      const t = e.target.closest && e.target.closest('[data-tilt]');
+      if (!t) return;
+      const r = t.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+      t.style.transition = 'transform .12s ease-out';
+      t.style.transform = `perspective(700px) rotateX(${(.5 - y) * 14}deg) rotateY(${(x - .5) * 16}deg) translateZ(6px)`;
+      t.style.setProperty('--gx', `${x * 100}%`);
+      t.style.setProperty('--gy', `${y * 100}%`);
+    }, { passive: true });
+    document.addEventListener('pointerout', (e) => {
+      const t = e.target.closest && e.target.closest('[data-tilt]');
+      if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
+      t.style.transition = 'transform .6s cubic-bezier(.34,1.56,.64,1)';
+      t.style.transform = '';
+    });
+
+    // Ripple on buttons
+    document.addEventListener('pointerdown', (e) => {
+      const b = e.target.closest && e.target.closest('.btn, .chip, .tally-btn, .bottombar button');
+      if (!b || reduceMotion()) return;
+      const r = b.getBoundingClientRect();
+      const size = Math.max(r.width, r.height) * 2.2;
+      const dot = el('span', { class: 'ripple', style: `width:${size}px;height:${size}px;left:${e.clientX - r.left - size / 2}px;top:${e.clientY - r.top - size / 2}px` });
+      if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
+      b.style.overflow = 'hidden';
+      b.append(dot);
+      setTimeout(() => dot.remove(), 750);
+    });
+  }
+
+  // ---------------------------------------------------------------------
   // Boot
   // ---------------------------------------------------------------------
   function wireChrome() {
@@ -1105,6 +1195,7 @@
 
   async function boot() {
     wireChrome();
+    wireMotion();
     applyTheme();
     const pill = $('#modePill');
     try {
