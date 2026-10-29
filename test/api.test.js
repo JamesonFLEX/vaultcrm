@@ -101,6 +101,17 @@ describe('API (needs database)', { skip: !process.env.PGHOST && 'PGHOST not set'
     const unlink = await call('POST', '/api/vault/link-records', { registry_id: conId, record_id: ann.body.record.id, field: 'account', target_record_id: null });
     assert.equal(unlink.body.record.payload.account, undefined);
 
+    const upd = await call('POST', '/api/vault/update-record', { registry_id: conId, record_id: ann.body.record.id, payload: { amount: '1200', first_name: null } });
+    assert.equal(upd.status, 200);
+    assert.deepEqual(upd.body.record.payload, { amount: 1200 });
+    assert.equal((await call('POST', '/api/vault/update-record', { registry_id: conId, record_id: ann.body.record.id, payload: { amount: 'x' } })).status, 400);
+    assert.equal((await call('POST', '/api/vault/update-record', { registry_id: accId, record_id: ann.body.record.id, payload: { name: 'x' } })).status, 404);
+
+    const typed = await call('POST', '/api/registry/create-table', { app_name, table_name: 'Typed', fields_schema: { site: 'URL', status: 'CHOICE:Open|Done' } });
+    assert.equal(typed.status, 201);
+    assert.equal((await call('POST', '/api/vault/insert-record', { registry_id: typed.body.registry_id, payload: { status: 'Nope' } })).status, 400);
+    assert.equal((await call('POST', '/api/vault/insert-record', { registry_id: typed.body.registry_id, payload: { site: 'https://x.io', status: 'Open' } })).status, 201);
+
     const del = await call('DELETE', `/api/vault/record/${conId}/${ann.body.record.id}`);
     assert.equal(del.status, 200);
   });

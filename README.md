@@ -42,10 +42,22 @@ Dockerfile            App image
 - [ ] Open `http://<server-ip>:3000`, paste your `API_KEY` in the header box
 - [ ] Put it behind HTTPS (Caddy or Nginx) before real data goes in
 
+## The workspace
+
+Tabs: **Home, Users, Companies, Locations, Contacts, Projects, Indi projects, Scripts mail, Calendar, Scriptbuilders & blasts, Sales events, Vendors, Notepad, Scripts sent mail, New table.** They're created automatically on first launch, already linked to each other (a contact belongs to a company, a project is assigned to a user, and so on).
+
+- **Home:** queue tally board with live open-project counts, company/location/contact search, quick actions, and your assigned projects
+- **Any record:** opens a side panel to edit it, plus every linked record (for example, a company's contacts and projects)
+- **Calendar & Sales events:** month view (agenda on phones) or list
+- **Notepad:** pinned notes first
+- **New table:** build your own table; it becomes its own tab
+- **Settings:** your name, who you are, queue names, theme, backups
+
 ## How it works
 
 - **No runtime DDL.** A "table" is a row in `sys_registry`. Every record is a row in `app_records_vault`, scoped by `registry_id`.
-- **Field types:** `TEXT`, `NUMBER`, `DATE`, `BOOLEAN`, `REF:<registry_id>`.
+- **Field types:** `TEXT`, `LONGTEXT`, `NUMBER`, `DATE`, `BOOLEAN`, `URL`, `EMAIL`, `PHONE`, `CHOICE:A|B|C`, `REF:<registry_id>`.
+- **One validator, two modes:** `public/local-engine.js` holds the rules; the server `require`s the same file.
 - **Validation:** every insert is checked against `fields_schema`. Bad types → 400. Unknown fields → dropped and reported in `dropped_fields`.
 - **Index:** GIN `jsonb_path_ops` on `payload` powers `@>` filters.
 
@@ -74,6 +86,7 @@ POST /api/vault/link-records
 | GET | `/api/registry/list` | — |
 | GET | `/api/registry/:id` | — |
 | POST | `/api/vault/insert-record` | `registry_id, payload` |
+| POST | `/api/vault/update-record` | `registry_id, record_id, payload` (null clears a field) |
 | POST | `/api/vault/query-records` | `registry_id, filterField?, filterValue?, limit?, offset?, expand?` |
 | POST | `/api/vault/link-records` | `registry_id, record_id, field, target_record_id` |
 | DELETE | `/api/vault/record/:registryId/:id` | — |
@@ -93,4 +106,5 @@ PGHOST=localhost npm test  # + full API tests against a database loaded with ini
 - Single shared API key — no per-user accounts or roles yet.
 - Filters are exact-match only (`@>`). No ranges, "contains" text search, or sorting by field yet.
 - Schemas are create-only — no edit-table endpoint yet.
+- Search, sort and filters run on the first 500 records of a table.
 - Deleting a record doesn't clear REF fields pointing at it; those show as a short ID in the grid.

@@ -59,3 +59,27 @@ test('backup export/import round-trips and rejects junk', async () => {
   await assert.rejects(V.importData('not json'));
   await assert.rejects(V.importData('{"registry":[],"records":[{"id":"x"}]}'));
 });
+
+test('new field types validate in both modes', () => {
+  const s = V.validateSchemaDef({ site: 'URL', mail: 'EMAIL', tel: 'PHONE', body: 'LONGTEXT', status: 'CHOICE: Intake | Delivered ' });
+  assert.equal(s.status, 'CHOICE:Intake|Delivered');
+  const ok = V.sanitizePayload(s, { site: 'https://example.com', mail: 'a@b.co', tel: '(916) 555-0100', body: 'x', status: 'Delivered' });
+  assert.equal(ok.clean.site, 'https://example.com/');
+  for (const bad of [{ site: 'javascript:alert(1)' }, { site: 'example.com' }, { mail: 'nope' }, { tel: '12' }, { status: 'delivered' }]) {
+    assert.throws(() => V.sanitizePayload(s, bad), (e) => e.status === 400, JSON.stringify(bad));
+  }
+  assert.throws(() => V.validateSchemaDef({ x: 'CHOICE:' }), (e) => e.status === 400);
+  assert.throws(() => V.validateSchemaDef({ x: 'CHOICE:a|a' }), (e) => e.status === 400);
+});
+
+test('update-record merges, clears, validates', async () => {
+  const t = await V.request('POST', '/api/registry/create-table', { app_name: 'A', table_name: 'P', fields_schema: { title: 'TEXT', status: 'CHOICE:Open|Done', due: 'DATE' } });
+  const id = t.body.registry_id;
+  const rec = (await V.request('POST', '/api/vault/insert-record', { registry_id: id, payload: { title: 'Loop', status: 'Open', due: '2026-11-01' } })).body.record;
+  const up = await V.request('POST', '/api/vault/update-record', { registry_id: id, record_id: rec.id, payload: { status: 'Done', due: null } });
+  assert.equal(up.status, 200);
+  assert.deepEqual(up.body.record.payload, { title: 'Loop', status: 'Done' });
+  assert.equal((await V.request('POST', '/api/vault/update-record', { registry_id: id, record_id: rec.id, payload: { status: 'Maybe' } })).status, 400);
+  const other = await V.request('POST', '/api/registry/create-table', { app_name: 'A', table_name: 'Q', fields_schema: { n: 'TEXT' } });
+  assert.equal((await V.request('POST', '/api/vault/update-record', { registry_id: other.body.registry_id, record_id: rec.id, payload: { n: 'x' } })).status, 404);
+});

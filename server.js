@@ -28,112 +28,11 @@ const pool = new Pool({
 pool.on('error', (err) => console.error('[pg] idle client error', err.message));
 
 // ---------------------------------------------------------------------
-// Schema + validation helpers
+// Schema + validation: shared with the browser engine so both modes
+// enforce identical rules (see public/local-engine.js)
 // ---------------------------------------------------------------------
-const FIELD_NAME_RE = /^[a-zA-Z_][a-zA-Z0-9_]{0,62}$/;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}(T\d{2}:\d{2}(:\d{2}(\.\d{1,6})?)?(Z|[+-]\d{2}:?\d{2})?)?$/;
-const BASE_TYPES = new Set(['TEXT', 'NUMBER', 'DATE', 'BOOLEAN']);
-const MAX_TEXT = 10000;
-
-const isUuid = (v) => typeof v === 'string' && UUID_RE.test(v);
-
-class HttpError extends Error {
-  constructor(status, message, details) {
-    super(message);
-    this.status = status;
-    this.details = details;
-  }
-}
-
-/** Parse a type token. Returns {base, target} or null. REF:<uuid> = relationship. */
-function parseType(t) {
-  if (typeof t !== 'string') return null;
-  const up = t.trim().toUpperCase();
-  if (BASE_TYPES.has(up)) return { base: up };
-  if (up.startsWith('REF:')) {
-    const target = t.trim().slice(4).toLowerCase();
-    return isUuid(target) ? { base: 'REF', target } : null;
-  }
-  return null;
-}
-
-/** Validate a fields_schema definition from the client. */
-function validateSchemaDef(schema) {
-  if (!schema || typeof schema !== 'object' || Array.isArray(schema)) {
-    throw new HttpError(400, 'fields_schema must be an object');
-  }
-  const keys = Object.keys(schema);
-  if (keys.length === 0) throw new HttpError(400, 'fields_schema needs at least one field');
-  if (keys.length > 100) throw new HttpError(400, 'fields_schema max 100 fields');
-  const clean = {};
-  const errors = [];
-  for (const k of keys) {
-    if (!FIELD_NAME_RE.test(k)) { errors.push(`${k}: invalid field name`); continue; }
-    const pt = parseType(schema[k]);
-    if (!pt) { errors.push(`${k}: unknown type "${schema[k]}"`); continue; }
-    clean[k] = pt.base === 'REF' ? `REF:${pt.target}` : pt.base;
-  }
-  if (errors.length) throw new HttpError(400, 'Invalid fields_schema', errors);
-  return clean;
-}
-
-/** Coerce + check one value against its type. Returns {ok, value, error}. */
-function coerce(type, raw) {
-  if (raw === null || raw === undefined || raw === '') return { ok: true, value: null };
-  const pt = parseType(type);
-  switch (pt && pt.base) {
-    case 'TEXT':
-      if (typeof raw === 'object') return { ok: false, error: 'expected text' };
-      { const s = String(raw);
-        if (s.length > MAX_TEXT) return { ok: false, error: `text exceeds ${MAX_TEXT} chars` };
-        return { ok: true, value: s }; }
-    case 'NUMBER': {
-      const n = typeof raw === 'number' ? raw
-        : (typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : NaN);
-      return Number.isFinite(n) ? { ok: true, value: n } : { ok: false, error: 'expected number' };
-    }
-    case 'DATE': {
-      if (typeof raw !== 'string' || !ISO_DATE_RE.test(raw) || Number.isNaN(Date.parse(raw))) {
-        return { ok: false, error: 'expected ISO 8601 date (YYYY-MM-DD)' };
-      }
-      // Reject impossible calendar dates like 2026-02-31 that Date.parse rolls over
-      const [y, m, d] = raw.slice(0, 10).split('-').map(Number);
-      const dt = new Date(Date.UTC(y, m - 1, d));
-      if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== m - 1 || dt.getUTCDate() !== d) {
-        return { ok: false, error: 'invalid calendar date' };
-      }
-      return { ok: true, value: raw };
-    }
-    case 'BOOLEAN':
-      if (typeof raw === 'boolean') return { ok: true, value: raw };
-      if (raw === 'true' || raw === 1 || raw === '1') return { ok: true, value: true };
-      if (raw === 'false' || raw === 0 || raw === '0') return { ok: true, value: false };
-      return { ok: false, error: 'expected boolean' };
-    case 'REF':
-      return isUuid(raw) ? { ok: true, value: raw.toLowerCase() } : { ok: false, error: 'expected record UUID' };
-    default:
-      return { ok: false, error: 'unknown field type' };
-  }
-}
-
-/** Validate a full payload. Unknown fields are dropped (reported back). */
-function sanitizePayload(schema, payload) {
-  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
-    throw new HttpError(400, 'payload must be an object');
-  }
-  const clean = {};
-  const errors = [];
-  const dropped = [];
-  for (const key of Object.keys(payload)) {
-    if (!Object.prototype.hasOwnProperty.call(schema, key)) { dropped.push(key); continue; }
-    const r = coerce(schema[key], payload[key]);
-    if (!r.ok) errors.push(`${key}: ${r.error}`);
-    else if (r.value !== null) clean[key] = r.value;
-  }
-  if (errors.length) throw new HttpError(400, 'Payload failed schema validation', errors);
-  return { clean, dropped };
-}
+const { validateSchemaDef, sanitizePayload, coerce, parseType, isUuid, HttpError } =
+  require('./public/local-engine.js');
 
 /** Make sure every REF value in a payload points at a real record in the right table. */
 async function verifyRefs(client, schema, clean) {
@@ -289,6 +188,23 @@ app.post('/api/vault/query-records', wrap(async (req, res) => {
   res.json({ table: reg, records: rows, refs, limit, offset });
 }));
 
+// Update a record: validated partial merge. Fields sent as null/'' are removed.
+app.post('/api/vault/update-record', wrap(async (req, res) => {
+  const { registry_id, record_id, payload } = req.body || {};
+  if (!isUuid(record_id)) throw new HttpError(400, 'record_id must be a UUID');
+  const reg = await getRegistry(pool, registry_id);
+  const { clean, dropped, cleared } = sanitizePayload(reg.fields_schema, payload);
+  await verifyRefs(pool, reg.fields_schema, clean);
+  const { rows } = await pool.query(
+    `UPDATE app_records_vault SET payload = (payload - $3::text[]) || $2::jsonb
+      WHERE id = $1 AND registry_id = $4
+      RETURNING id, registry_id, payload, date_created, date_modified`,
+    [record_id, JSON.stringify(clean), cleared, reg.id]
+  );
+  if (!rows.length) throw new HttpError(404, 'Record not found in this table');
+  res.json({ record: rows[0], dropped_fields: dropped });
+}));
+
 // 4. Link records: write a target record UUID into a REF field.
 //    Relationship = REF:<target registry> type in the schema + UUID in the payload.
 //    Many-to-one (Contact -> Account) is native. One-to-many is a reverse
@@ -352,7 +268,7 @@ app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.ht
 // ---- Errors ------------------------------------------------------------
 app.use('/api', (req, res) => res.status(404).json({ error: 'Not found' }));
 app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
-  if (err instanceof HttpError) return res.status(err.status).json({ error: err.message, details: err.details });
+  if (err instanceof HttpError || err.expose) return res.status(err.status).json({ error: err.message, details: err.details });
   if (err.type === 'entity.parse.failed') return res.status(400).json({ error: 'Malformed JSON' });
   if (err.type === 'entity.too.large') return res.status(413).json({ error: 'Payload too large' });
   console.error('[server]', err);
