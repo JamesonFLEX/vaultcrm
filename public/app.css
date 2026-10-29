@@ -4,13 +4,16 @@
    ===================================================================== */
 :root {
   /* Light = Carrara marble */
-  --stone: #EEEBE6;
-  --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.84 0 0 0 0 0.82 0 0 0 0 0.79 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.36 0 0 0 0 0.36 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.36 0 0 0 0 0.36 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.78 0 0 0 0 0.06 0 0 0 0 0.14 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23F2EFEA'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.36000000000000004'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.35'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.45'/%3E%3C/svg%3E");
-  --glass: rgba(255, 255, 255, .72);
-  --glass-2: rgba(255, 255, 255, .55);
-  --glass-3: rgba(20, 16, 16, .06);
-  --edge: rgba(20, 14, 14, .08);
-  --edge-strong: rgba(20, 14, 14, .16);
+  --stone: #E7E3DE;
+  --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.84 0 0 0 0 0.82 0 0 0 0 0.79 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.36 0 0 0 0 0.36 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.38 0 0 0 0 0.36 0 0 0 0 0.36 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.78 0 0 0 0 0.06 0 0 0 0 0.14 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%23F2EFEA'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.36000000000000004'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.35'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.45'/%3E%3C/svg%3E");
+  --glass: rgba(255, 255, 255, .96);
+  --glass-2: rgba(250, 249, 247, .95);
+  --glass-3: rgba(20, 16, 16, .045);
+  --edge: rgba(20, 14, 14, .09);
+  --edge-strong: rgba(20, 14, 14, .18);
+  --marble-op: .14;
+  --vignette: rgba(30, 24, 24, .16);
+  --ember: rgba(200, 16, 46, .06);
   --text: #141112;
   --muted: #5E5758;
   --faint: #918A8A;
@@ -22,7 +25,7 @@
   --ok: #1F7A4D;
   --pill-l: 32%;
   --pill-a: .12;
-  --shadow: 0 1px 2px rgba(20,14,14,.06), 0 18px 40px -22px rgba(20,14,14,.35);
+  --shadow: 0 1px 2px rgba(20,14,14,.08), 0 22px 50px -22px rgba(20,14,14,.42);
   --shadow-lg: 0 40px 90px -30px rgba(20,14,14,.5);
   --blur: saturate(1.3) blur(18px);
 
@@ -40,27 +43,29 @@
 /* Dark = Nero Marquina */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --stone: #09090A;
-    --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.17 0 0 0 0 0.18 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.88 0 0 0 0 0.08 0 0 0 0 0.16 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%2308080A'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.48'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.7'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.6'/%3E%3C/svg%3E");
-    --glass: rgba(18, 17, 18, .7); --glass-2: rgba(28, 26, 27, .62); --glass-3: rgba(255,255,255,.05);
-    --edge: rgba(255,255,255,.07); --edge-strong: rgba(255,255,255,.15);
+    --stone: #050505;
+    --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.17 0 0 0 0 0.18 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.88 0 0 0 0 0.08 0 0 0 0 0.16 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%2308080A'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.48'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.7'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.6'/%3E%3C/svg%3E");
+    --glass: rgba(20, 19, 21, .96); --glass-2: rgba(28, 27, 29, .96); --glass-3: rgba(255,255,255,.045);
+    --edge: rgba(255,255,255,.08); --edge-strong: rgba(255,255,255,.16);
+    --marble-op: .1; --vignette: #000; --ember: rgba(232,40,60,.07);
     --text: #F3EFEA; --muted: #A8A19C; --faint: #6F6966;
     --red: #E8283C; --red-hot: #FF4255; --red-soft: rgba(232,40,60,.14); --red-glow: rgba(232,40,60,.5); --on-red: #FFFFFF;
     --pill-l: 74%; --pill-a: .16;
-    --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 22px 50px -24px rgba(0,0,0,.85);
+    --shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 24px 60px -20px rgba(0,0,0,.95), 0 0 0 1px rgba(0,0,0,.6);
     --shadow-lg: 0 50px 110px -30px rgba(0,0,0,.9);
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --stone: #09090A;
-  --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.17 0 0 0 0 0.18 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.88 0 0 0 0 0.08 0 0 0 0 0.16 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%2308080A'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.48'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.7'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.6'/%3E%3C/svg%3E");
-  --glass: rgba(18, 17, 18, .7); --glass-2: rgba(28, 26, 27, .62); --glass-3: rgba(255,255,255,.05);
-  --edge: rgba(255,255,255,.07); --edge-strong: rgba(255,255,255,.15);
+  --stone: #050505;
+  --marble: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='1400' height='1400'%3E%3Cfilter id='c' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.006' numOctaves='4' seed='5'/%3E%3CfeColorMatrix values='0 0 0 0 0.18 0 0 0 0 0.17 0 0 0 0 0.18 1.6 0 0 0 -.62'/%3E%3C/filter%3E%3Cfilter id='v' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0016 0.0038' numOctaves='5' seed='21'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.9 0 0 0 0 0 0 0 0 0.55 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='.9'/%3E%3C/filter%3E%3Cfilter id='f' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0035 0.008' numOctaves='4' seed='8'/%3E%3CfeColorMatrix values='0 0 0 0 0.93 0 0 0 0 0.91 0 0 0 0 0.88 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3C/filter%3E%3Cfilter id='r' x='0' y='0' width='100%25' height='100%25' %3E%3CfeTurbulence type='fractalNoise' stitchTiles='stitch' baseFrequency='0.0013 0.0033' numOctaves='5' seed='44'/%3E%3CfeColorMatrix values='0 0 0 0 0.88 0 0 0 0 0.08 0 0 0 0 0.16 1 0 0 0 0'/%3E%3CfeComponentTransfer%3E%3CfeFuncA type='table' tableValues='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0.85 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0'/%3E%3C/feComponentTransfer%3E%3CfeGaussianBlur stdDeviation='1'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' fill='%2308080A'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23c%29'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23f%29' opacity='0.48'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23r%29' opacity='0.7'/%3E%3Crect width='100%25' height='100%25' filter='url%28%23v%29' opacity='0.6'/%3E%3C/svg%3E");
+  --glass: rgba(20, 19, 21, .96); --glass-2: rgba(28, 27, 29, .96); --glass-3: rgba(255,255,255,.045);
+  --edge: rgba(255,255,255,.08); --edge-strong: rgba(255,255,255,.16);
+  --marble-op: .1; --vignette: #000; --ember: rgba(232,40,60,.07);
   --text: #F3EFEA; --muted: #A8A19C; --faint: #6F6966;
   --red: #E8283C; --red-hot: #FF4255; --red-soft: rgba(232,40,60,.14); --red-glow: rgba(232,40,60,.5); --on-red: #FFFFFF;
   --pill-l: 74%; --pill-a: .16;
-  --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 22px 50px -24px rgba(0,0,0,.85);
+  --shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 24px 60px -20px rgba(0,0,0,.95), 0 0 0 1px rgba(0,0,0,.6);
   --shadow-lg: 0 50px 110px -30px rgba(0,0,0,.9);
   color-scheme: dark;
 }
@@ -78,15 +83,18 @@ body {
 /* Marble slab: fixed layer that drifts slightly with the pointer */
 body::before {
   content: ""; position: fixed; inset: -40px; z-index: -2; pointer-events: none;
-  background: var(--marble) center / 1400px 1400px, var(--stone);
-  transform: translate3d(calc(var(--px, 0) * -14px), calc(var(--py, 0) * -14px), 0);
+  background: var(--marble) center / 1400px 1400px;
+  opacity: var(--marble-op, .1);
+  -webkit-mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, transparent 25%, rgba(0,0,0,.55) 65%, #000 100%);
+          mask-image: radial-gradient(ellipse 75% 70% at 50% 45%, transparent 25%, rgba(0,0,0,.55) 65%, #000 100%);
+  transform: translate3d(calc(var(--px, 0) * -10px), calc(var(--py, 0) * -10px), 0);
   transition: transform .6s var(--ease);
 }
-body::after { /* crimson light falloff */
+body::after { /* deep vignette + a faint crimson glow from the top */
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background:
-    radial-gradient(60vw 50vh at 85% -10%, var(--red-soft), transparent 70%),
-    radial-gradient(50vw 60vh at -10% 110%, var(--red-soft), transparent 70%);
+    radial-gradient(70vw 40vh at 80% -12%, var(--ember), transparent 70%),
+    radial-gradient(ellipse 90% 85% at 50% 40%, transparent 40%, var(--vignette) 100%);
 }
 button, input, select, textarea { font: inherit; color: inherit; }
 a { color: var(--red); text-underline-offset: 3px; }
@@ -290,9 +298,9 @@ svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
   background:
     radial-gradient(circle at calc(32% + var(--ox, 0) * 14%) calc(26% + var(--oy, 0) * 14%), rgba(255,255,255,.55), rgba(255,255,255,0) 32%),
     radial-gradient(circle at 70% 78%, rgba(0,0,0,0), rgba(0,0,0,.55) 75%),
-    var(--marble) 0 0 / 520px 520px, var(--stone);
+    var(--marble) 0 0 / 700px 700px, var(--stone);
   box-shadow: inset -22px -28px 50px rgba(0,0,0,.6), inset 10px 12px 30px rgba(255,255,255,.12), 0 40px 70px -20px var(--red-glow), 0 0 0 1px var(--edge);
-  animation: spin 40s linear infinite, float 7s ease-in-out infinite;
+  animation: spin 60s linear infinite, float 7s ease-in-out infinite;
   transform: rotateX(calc(var(--oy, 0) * -12deg)) rotateY(calc(var(--ox, 0) * 12deg));
   transition: transform .5s var(--ease);
 }
@@ -304,7 +312,7 @@ svg.i { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor;
   filter: blur(1px); opacity: .9; animation: rim 9s linear infinite;
 }
 .orb-shadow { position: absolute; left: 18%; right: 18%; bottom: -26px; height: 22px; border-radius: 50%; background: radial-gradient(closest-side, rgba(0,0,0,.45), transparent); filter: blur(4px); animation: shadow 7s ease-in-out infinite; }
-@keyframes spin { to { background-position: 0 0, 0 0, 520px 0, 0 0; } }
+@keyframes spin { to { background-position: 0 0, 0 0, 700px 0, 0 0; } }
 @keyframes float { 50% { translate: 0 -10px; } }
 @keyframes shadow { 50% { transform: scaleX(.85); opacity: .7; } }
 @keyframes rim { to { rotate: 360deg; } }
