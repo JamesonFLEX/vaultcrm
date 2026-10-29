@@ -10,6 +10,7 @@
   .tab-active { background:#0f172a; color:#fff; }
   .grid-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; }
   td, th { white-space:nowrap; }
+  .hidden { display:none !important; } /* keeps tabs working even if the Tailwind CDN fails */
 </style>
 </head>
 <body class="bg-slate-100 text-slate-900 min-h-screen">
@@ -20,9 +21,18 @@
       <h1 class="text-xl font-bold tracking-tight">VaultCRM</h1>
       <p class="text-xs text-slate-300">Low-code JSONB engine</p>
     </div>
-    <div class="flex items-center gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <input id="apiKey" type="password" placeholder="API key (if set)" class="text-sm rounded px-2 py-1 text-slate-900 w-40">
+      <button id="exportBtn" class="hidden text-xs font-semibold rounded px-3 py-1 bg-white text-slate-900 hover:bg-slate-200">Export backup</button>
+      <label id="importLbl" class="hidden text-xs font-semibold rounded px-3 py-1 bg-white text-slate-900 hover:bg-slate-200 cursor-pointer">Import backup
+        <input id="importFile" type="file" accept="application/json,.json" class="hidden">
+      </label>
       <span id="health" class="text-xs px-2 py-1 rounded bg-slate-700">checking…</span>
+    </div>
+  </div>
+  <div id="localBanner" class="hidden bg-amber-300 text-slate-900 text-xs sm:text-sm">
+    <div class="max-w-6xl mx-auto px-4 py-2">
+      <strong>Browser mode:</strong> data is saved on this device and browser only. It doesn't sync to other devices. Use <strong>Export backup</strong> regularly.
     </div>
   </div>
 </header>
@@ -125,6 +135,7 @@
   </div>
 </template>
 
+<script src="local-engine.js"></script>
 <script>
 (() => {
   const $ = (s, r = document) => r.querySelector(s);
@@ -147,7 +158,40 @@
   $('#apiKey').addEventListener('change', (e) => {
     try { localStorage.setItem('vault_api_key', e.target.value); } catch (_) {}
   });
+  // Browser mode: GitHub Pages (or ?local=1) runs the engine in this browser.
+  const LOCAL = /\.github\.io$/i.test(location.hostname) ||
+    new URLSearchParams(location.search).has('local') || location.protocol === 'file:';
+  if (LOCAL) {
+    $('#apiKey').classList.add('hidden');
+    ['#exportBtn', '#importLbl', '#localBanner'].forEach((s) => $(s).classList.remove('hidden'));
+    $('#exportBtn').addEventListener('click', async () => {
+      const blob = new Blob([await VaultLocal.exportData()], { type: 'application/json' });
+      const a = el('a', { href: URL.createObjectURL(blob), download: `vaultcrm-backup-${new Date().toISOString().slice(0, 10)}.json` });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    });
+    $('#importFile').addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file) return;
+      if (!confirm('Importing replaces ALL data in this browser with the backup. Continue?')) return;
+      try {
+        const r = await VaultLocal.importData(await file.text());
+        alert(`Imported ${r.tables} tables and ${r.records} records.`);
+        await loadTables(); runQuery();
+      } catch (err) { alert('Import failed: ' + err.message); }
+    });
+  }
+
   async function api(method, url, body) {
+    if (LOCAL) {
+      const { status, body: data } = await VaultLocal.request(method, url, body);
+      if (status >= 400) {
+        const det = data.details ? ' — ' + [].concat(data.details).join('; ') : '';
+        throw new Error(data.error + det);
+      }
+      return data;
+    }
     const res = await fetch(url, {
       method,
       headers: { 'Content-Type': 'application/json', 'x-api-key': $('#apiKey').value },
@@ -174,7 +218,7 @@
 
   // ---------- Health ----------
   api('GET', '/api/health')
-    .then(() => { $('#health').textContent = 'online'; $('#health').className = 'text-xs px-2 py-1 rounded bg-emerald-600'; })
+    .then(() => { $('#health').textContent = LOCAL ? 'browser mode' : 'online'; $('#health').className = 'text-xs px-2 py-1 rounded bg-emerald-600'; })
     .catch(() => { $('#health').textContent = 'offline'; $('#health').className = 'text-xs px-2 py-1 rounded bg-red-600'; });
 
   // ---------- Tables ----------

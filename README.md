@@ -4,15 +4,30 @@
 
 Self-hosted low-code database + CRM. PostgreSQL JSONB storage, Express API, Tailwind dashboard. Sized for 1 vCPU / 2 GB RAM.
 
-> **Needs a server.** This runs Node + PostgreSQL, so it can't be hosted on GitHub Pages (static files only). Use any small VPS — DigitalOcean, Hetzner, Lightsail, etc.
+## Two ways to run it
+
+| | **Browser mode** (GitHub Pages) | **Server mode** (Docker) |
+|---|---|---|
+| Where | `https://<user>.github.io/vaultcrm/` | Any VPS, 1 vCPU / 2 GB |
+| Storage | This browser only (IndexedDB) | PostgreSQL |
+| Sync across devices | No — use Export/Import backup | Yes |
+| Cost | Free | ~$5–6/month |
+
+Browser mode turns on automatically on `*.github.io` (or add `?local=1` to the URL). It uses the same field types, validation and relationship rules as the server (`public/local-engine.js`), and backups export as JSON.
+
+**Turn on GitHub Pages:** repo Settings → Pages → Source: *Deploy from a branch* → Branch: `main`, folder `/ (root)`.
+
+**Browser-mode caution:** clearing site data or using private browsing wipes it. Export a backup regularly.
 
 ## Repo layout
 
 ```
 init.sql              PostgreSQL schema (loaded automatically by Docker)
 server.js             Express API + validation engine
-public/index.html     Dashboard (served by the API)
-test/api.test.js      Validator + full API tests (node:test)
+index.html            GitHub Pages entry (redirects to public/)
+public/index.html     Dashboard (served by the API, or by Pages)
+public/local-engine.js  In-browser engine for GitHub Pages mode
+test/                 Validator, server API, and browser-engine tests
 docker-compose.yml    Postgres + app with memory limits
 Dockerfile            App image
 .github/workflows/    CI: schema load, tests vs. real Postgres, Docker build
