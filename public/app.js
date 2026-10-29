@@ -502,7 +502,9 @@
       !me ? el('p', { class: 'hint', style: 'padding:0 18px' }, 'Showing every open project. Choose who you are in Settings to see only yours.') : null,
       mine.length ? gridTable(projects, sortRecords(projects, mine, projects.sort), projects.columns, () => render())
         : emptyState('folder', 'No projects here yet', me ? 'Projects assigned to you will show up here.' : 'Create your first project to get the board moving.',
-          el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined }) }, icon('plus'), 'New project')));
+          el('div', { class: 'actions-row', style: 'justify-content:center' },
+            el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined }) }, icon('plus'), 'New project'),
+            !all.length && !hasSample() ? el('button', { class: 'btn', onclick: (e) => runSample(e.currentTarget, true) }, 'Load sample data') : null)));
 
     return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), queues, searches, actions, projCard);
   }
@@ -809,6 +811,107 @@
   }
 
   // ---------------------------------------------------------------------
+  // Sample data (fictional placeholders for testing the interface)
+  // Every inserted id is remembered so "Remove sample data" deletes only these.
+  // ---------------------------------------------------------------------
+  function sampleSet() {
+    const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const q = settings.queues;
+    const Q = (i) => q[i % q.length];
+    return [
+      ['users', 'u1', { name: 'Avery Cole', role: 'Production', email: 'avery@example.com', phone: '916-555-0101', active: true }],
+      ['users', 'u2', { name: 'Morgan Reyes', role: 'Sales', email: 'morgan@example.com', phone: '916-555-0102', active: true }],
+      ['users', 'u3', { name: 'Sam Patel', role: 'Support', email: 'sam@example.com', phone: '916-555-0103', active: true }],
+
+      ['companies', 'c1', { company_name: 'Blue Harbor Dental', status: 'Active', phone: '916-555-0140', website: 'https://example.com/blue-harbor', industry: 'Dental', notes: 'Sample customer. Two offices, wants seasonal greetings rotated quarterly.' }],
+      ['companies', 'c2', { company_name: 'Summit Ridge Auto Care', status: 'Active', phone: '916-555-0150', website: 'https://example.com/summit-ridge', industry: 'Auto repair', notes: 'Sample customer. Promotes tire specials and service reminders on hold.' }],
+      ['companies', 'c3', { company_name: 'Oakline Pizza Co.', status: 'Lead', phone: '916-555-0160', website: 'https://example.com/oakline', industry: 'Restaurant', notes: 'Sample lead. Interested in a holiday ordering message.' }],
+
+      ['locations', 'l1', { location_name: 'Blue Harbor — Midtown', company: '@c1', address: '100 Sample St', city: 'Sacramento', state: 'CA', zip: '95811', phone: '916-555-0141' }],
+      ['locations', 'l2', { location_name: 'Blue Harbor — Folsom', company: '@c1', address: '200 Example Ave', city: 'Folsom', state: 'CA', zip: '95630', phone: '916-555-0142' }],
+      ['locations', 'l3', { location_name: 'Summit Ridge — Roseville', company: '@c2', address: '300 Placeholder Blvd', city: 'Roseville', state: 'CA', zip: '95661', phone: '916-555-0151' }],
+      ['locations', 'l4', { location_name: 'Oakline — Rocklin', company: '@c3', address: '400 Demo Way', city: 'Rocklin', state: 'CA', zip: '95677', phone: '916-555-0161' }],
+
+      ['contacts', 'p1', { first_name: 'Dana', last_name: 'Brooks', company: '@c1', location: '@l1', job_title: 'Office manager', email: 'dana@example.com', phone: '916-555-0143' }],
+      ['contacts', 'p2', { first_name: 'Chris', last_name: 'Nguyen', company: '@c2', location: '@l3', job_title: 'Owner', email: 'chris@example.com', phone: '916-555-0152' }],
+      ['contacts', 'p3', { first_name: 'Riley', last_name: 'Shaw', company: '@c3', location: '@l4', job_title: 'General manager', email: 'riley@example.com', phone: '916-555-0162' }],
+
+      ['vendors', 'v1', { vendor_name: 'Sample Voice Talent Co.', service: 'Voice talent', contact_name: 'Jordan Lee', email: 'voices@example.com', phone: '916-555-0170', website: 'https://example.com/voices' }],
+      ['vendors', 'v2', { vendor_name: 'Placeholder Music Library', service: 'Licensed music beds', contact_name: 'Taylor Kim', email: 'music@example.com', website: 'https://example.com/music' }],
+
+      ['projects', 'j1', { project_title: 'Winter greeting refresh', status: 'Production', queue: Q(2), assigned_to: '@u1', company: '@c1', project_type: 'Production only', date_due: day(-2), url: 'https://example.com/scripts/winter', url_details: 'Approved script', project_attachment: 'https://example.com/audio/blue-harbor-winter-v2.wav' }],
+      ['projects', 'j2', { project_title: 'New hold loop — 2 locations', status: 'Scripting', queue: Q(0), assigned_to: '@u1', company: '@c1', project_type: 'Implementation', date_due: day(5) }],
+      ['projects', 'j3', { project_title: 'Tire special promo', status: 'Review', queue: Q(4), assigned_to: '@u2', company: '@c2', project_type: 'Script update', date_due: day(3), url: 'https://example.com/scripts/tires' }],
+      ['projects', 'j4', { project_title: 'Service reminder spots', status: 'Intake', queue: Q(1), assigned_to: '@u3', company: '@c2', project_type: 'Production only', date_due: day(10) }],
+      ['projects', 'j5', { project_title: 'Holiday ordering message', status: 'Intake', queue: Q(4), assigned_to: '@u2', company: '@c3', project_type: 'Any', date_due: day(14) }],
+      ['projects', 'j6', { project_title: 'Billing setup for new account', status: 'On hold', queue: Q(3), assigned_to: '@u3', company: '@c3', project_type: 'Implementation', date_due: day(7) }],
+      ['projects', 'j7', { project_title: 'Fall promo audio', status: 'Delivered', queue: Q(2), assigned_to: '@u1', company: '@c2', project_type: 'Production only', date_due: day(-12), project_attachment: 'https://example.com/audio/summit-fall.wav' }],
+
+      ['indi_projects', 'i1', { project_title: 'Rebuild music bed library index', status: 'Production', assigned_to: '@u1', date_due: day(6) }],
+      ['indi_projects', 'i2', { project_title: 'Voice talent sample reel', status: 'Scripting', assigned_to: '@u2', company: '@c1', date_due: day(9) }],
+
+      ['scripts_mail', 'm1', { subject: 'Winter script edits', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Thank you for calling Blue Harbor Dental. Your smile is our priority — please stay on the line and the next available team member will be with you shortly.' }],
+      ['scripts_mail', 'm2', { subject: 'Holiday hours copy', status: 'New', company: '@c3', contact: '@p3', received: day(-1), script: 'Thanks for calling Oakline Pizza Co. Ask about our holiday family meal deals.' }],
+
+      ['scripts_sent', 's1', { subject: 'Tire promo script — draft 2', company: '@c2', sent_to: 'chris@example.com', date_sent: day(-2), script: 'Thanks for holding with Summit Ridge Auto Care. Ask your service advisor about this month’s tire special.' }],
+      ['scripts_sent', 's2', { subject: 'Winter greeting — final', company: '@c1', sent_to: 'dana@example.com', date_sent: day(-5) }],
+
+      ['scriptbuilders', 'b1', { title: 'Dental scriptbuilder', kind: 'Scriptbuilder', pdf_link: 'https://example.com/pdfs/dental-scriptbuilder.pdf', date: day(-20) }],
+      ['scriptbuilders', 'b2', { title: 'Holiday promo blast', kind: 'Blast', pdf_link: 'https://example.com/pdfs/holiday-blast.pdf', date: day(-4) }],
+
+      ['calendar', 'e1', { title: 'Studio session — Blue Harbor', date: day(1), time: '10:00 AM', assigned_to: '@u1', company: '@c1' }],
+      ['calendar', 'e2', { title: 'Script review call', date: day(3), time: '2:30 PM', assigned_to: '@u2', company: '@c2' }],
+      ['calendar', 'e3', { title: 'Install check-in', date: day(8), time: '9:00 AM', assigned_to: '@u3', company: '@c1' }],
+      ['calendar', 'e4', { title: 'Team production meeting', date: day(0), time: '4:00 PM' }],
+
+      ['sales_events', 'x1', { event: 'Oakline demo + proposal', date: day(4), status: 'Planned', company: '@c3', value: 1200 }],
+      ['sales_events', 'x2', { event: 'Summit Ridge renewal', date: day(-6), status: 'Done', company: '@c2', value: 2400 }],
+
+      ['notepad', 'n1', { title: 'Sample data', body: 'Everything you see right now is fictional placeholder data. Remove it in Settings → Sample data before importing real records.', pinned: true }],
+      ['notepad', 'n2', { title: 'Hold message checklist', body: 'Confirm hours\nConfirm promo end date\nPick voice + music bed\nSend script for approval' }],
+      ['notepad', 'n3', { title: 'Ideas', body: 'Seasonal greeting rotation offer for multi-location accounts.' }]
+    ];
+  }
+
+  async function loadSampleData() {
+    const ids = {};       // placeholder -> real record id
+    const made = {};      // spec key -> [ids]
+    for (const [key, ref, payload] of sampleSet()) {
+      const spec = byKey[key];
+      if (!spec) continue;
+      const body = {};
+      for (const [k, v] of Object.entries(payload)) {
+        if (!(k in schemaOf(spec))) continue;
+        body[k] = typeof v === 'string' && v.startsWith('@') ? ids[v.slice(1)] : v;
+      }
+      const r = await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload: body });
+      ids[ref] = r.record.id;
+      (made[key] = made[key] || []).push(r.record.id);
+    }
+    const prev = settings.sampleIds || {};
+    for (const [k, v] of Object.entries(made)) prev[k] = (prev[k] || []).concat(v);
+    settings.sampleIds = prev;
+    saveSettings();
+    Object.keys(cache).forEach((k) => delete cache[k]);
+  }
+
+  async function removeSampleData() {
+    const all = settings.sampleIds || {};
+    // Delete records that point at others first (reverse of creation order)
+    const order = SPEC.map((s) => s.key).reverse();
+    for (const key of order) {
+      const spec = byKey[key];
+      for (const id of all[key] || []) {
+        try { await api('DELETE', `/api/vault/record/${spec.reg.id}/${id}`); } catch (_) { /* already gone */ }
+      }
+    }
+    delete settings.sampleIds;
+    saveSettings();
+    Object.keys(cache).forEach((k) => delete cache[k]);
+  }
+  const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
+
+  // ---------------------------------------------------------------------
   // New table builder
   // ---------------------------------------------------------------------
   const TYPE_OPTIONS = [
@@ -935,8 +1038,28 @@
         el('label', { class: 'field', for: 's_theme' }, el('span', {}, 'Theme'), theme),
         el('label', { class: 'field wide', for: 's_q' }, el('span', {}, 'Queues', el('em', {}, 'one per line')), queues),
         key ? el('label', { class: 'field wide', for: 's_key' }, el('span', {}, 'Server API key'), key) : null,
+        el('div', { class: 'wide field' }, el('span', {}, 'Sample data'),
+          el('p', { class: 'hint', style: 'margin:0' }, hasSample()
+            ? 'Fictional placeholder records are loaded. Remove them before importing real data. Records you added yourself stay.'
+            : 'Fill every tab with 3 fictional customers and their projects, contacts, events and notes to try things out.'),
+          el('div', { class: 'actions-row' }, hasSample()
+            ? el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')
+            : el('button', { class: 'btn', type: 'button', onclick: (e) => runSample(e.currentTarget, true) }, icon('plus'), 'Load sample data'))),
         backup),
       el('div', { class: 'drawer-foot' }, el('span', { class: 'spacer' }), el('button', { class: 'btn ghost', onclick: closeDrawer }, 'Cancel'), saveBtn));
+  }
+  async function runSample(btn, add) {
+    if (!add && !confirm('Remove all sample records? Records you added yourself stay.')) return;
+    btn.disabled = true;
+    btn.lastChild.textContent = add ? 'Loading…' : 'Removing…';
+    try {
+      if (add) await loadSampleData(); else await removeSampleData();
+      closeDrawer();
+      toast(add ? 'Sample data loaded' : 'Sample data removed');
+      if (add) { settings.welcomed = true; saveSettings(); }
+      await render();
+      refreshCounts();
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
   }
   async function exportBackup() {
     const blob = new Blob([await VaultLocal.exportData()], { type: 'application/json' });
