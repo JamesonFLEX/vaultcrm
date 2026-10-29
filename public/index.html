@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#09090A">
+<meta name="theme-color" content="#050505">
 <title>VaultCRM</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="icon" type="image/svg+xml" href="img/vault-logo.svg">
 <link rel="stylesheet" href="app.css">
+<!-- Fonts load without blocking the first paint; system fonts show until they arrive -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=Instrument+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" media="print" onload="this.media='all'">
+<link rel="preload" as="script" href="local-engine.js">
+<link rel="preload" as="script" href="app.js">
 <script>
   // Apply saved theme before paint to avoid a flash
   try {
@@ -18,15 +23,13 @@
 </script>
 </head>
 <body>
+<div class="bg" id="bg" aria-hidden="true"></div>
 <div class="app">
   <aside class="rail" id="rail" aria-label="Main navigation">
     <div class="brand">
-      <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true">
-        <rect x="1" y="1" width="30" height="30" rx="9" class="bm-bg"/>
-        <path d="M7 16h2.5M11 11v10M14.5 7v18M18 12v8M21.5 9v14M25 16h0" class="bm-wave"/>
-      </svg>
+      <img class="brand-mark" src="img/vault-logo.svg" width="38" height="38" alt="">
       <div class="brand-text">
-        <span class="brand-name">VaultCRM</span>
+        <span class="brand-name">VAULT<small>CRM</small></span>
         <span class="brand-ws" id="wsName">Workspace</span>
       </div>
       <button class="icon-btn rail-close" id="railClose" aria-label="Close menu"></button>
@@ -45,7 +48,13 @@
         <button class="icon-btn" id="settingsBtn" aria-label="Settings"></button>
       </div>
     </header>
-    <main class="view" id="view" tabindex="-1"></main>
+    <main class="view" id="view" tabindex="-1">
+      <div class="skeleton" aria-label="Loading">
+        <div class="sk sk-title"></div>
+        <div class="sk-row"><div class="sk sk-tile"></div><div class="sk sk-tile"></div><div class="sk sk-tile"></div><div class="sk sk-tile"></div></div>
+        <div class="sk sk-panel"></div>
+      </div>
+    </main>
   </div>
 
   <nav class="bottombar" id="bottombar" aria-label="Quick navigation"></nav>
@@ -58,7 +67,7 @@
 
 <div class="toasts" id="toasts" aria-live="polite"></div>
 
-<script src="local-engine.js"></script>
-<script src="app.js"></script>
+<script src="local-engine.js" defer></script>
+<script src="app.js" defer></script>
 </body>
 </html>

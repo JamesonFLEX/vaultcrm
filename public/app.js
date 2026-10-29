@@ -102,7 +102,7 @@
     const dark = isDark();
     $('#themeBtn').replaceChildren(icon(dark ? 'sun' : 'moon'));
     $('#themeBtn').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-    $('meta[name="theme-color"]').setAttribute('content', dark ? '#09090A' : '#EEEBE6');
+    $('meta[name="theme-color"]').setAttribute('content', dark ? '#050505' : '#E7E3DE');
   }
   const isDark = () => settings.theme ? settings.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -327,7 +327,13 @@
       default: return el('span', {}, v);
     }
   }
+  const searchMemo = new WeakMap();
   function searchText(spec, rec) {
+    let t = searchMemo.get(rec);
+    if (t === undefined) { t = buildSearchText(spec, rec); searchMemo.set(rec, t); }
+    return t;
+  }
+  function buildSearchText(spec, rec) {
     return Object.keys(schemaOf(spec)).map((k) => {
       const v = rec.payload[k];
       if (v === undefined) return '';
@@ -448,7 +454,7 @@
 
     const now = new Date();
     const head = el('div', { class: 'page-head has-orb reveal' },
-      el('div', { class: 'orb-wrap', 'aria-hidden': 'true' }, el('div', { class: 'orb' }), el('div', { class: 'orb-shadow' })),
+      el('div', { class: 'home-logo', 'aria-hidden': 'true' }, el('img', { src: 'img/vault-logo.svg', width: 112, height: 112, alt: '', decoding: 'async' }), el('span', {}, 'VAULT')),
       el('div', { style: 'position:relative;z-index:1' },
         el('div', { class: 'eyebrow' }, now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })),
         el('h1', { class: 'page-title' }, settings.name ? `${settings.name}'s homepage` : 'Homepage')),
@@ -529,7 +535,7 @@
     });
   }
 
-  function gridTable(spec, recs, columns, onSort, sortState) {
+  function gridTable(spec, recs, columns, onSort, sortState, animate) {
     const cols = (columns || Object.keys(schemaOf(spec))).filter((c) => c in schemaOf(spec));
     const titleField = cols.find((c) => spec.title && spec.title({ [c]: 'x' }) === 'x') || cols.find((c) => typeOf(spec, c).base === 'TEXT');
     const ordered = titleField ? [titleField, ...cols.filter((c) => c !== titleField)] : cols;
@@ -545,7 +551,7 @@
         }));
       return tr;
     }));
-    return el('div', { class: 'grid-scroll' }, el('table', { class: 'grid' }, thead, tbody));
+    return el('div', { class: 'grid-scroll' }, el('table', { class: 'grid' + (animate === false ? '' : ' anim') }, thead, tbody));
   }
 
   async function renderTableView(spec, params) {
@@ -599,6 +605,7 @@
       queue ? el('button', { class: 'chip', 'aria-pressed': 'true', onclick: () => go('#/t/' + spec.key), title: 'Clear queue filter' }, `Queue: ${queue}  ×`) : null,
       chips);
 
+    let drawn = false;
     function draw() {
       const q = st.q.trim().toLowerCase();
       let rows = base;
@@ -607,13 +614,17 @@
       rows = sortRecords(spec, rows, st.sort);
       const onSort = (c) => { st.sort = st.sort && st.sort.field === c ? { field: c, dir: -st.sort.dir } : { field: c, dir: 1 }; draw(); };
       body.replaceChildren(
-        rows.length ? gridTable(spec, rows, spec.columns, onSort, st.sort || { field: '' })
+        rows.length ? gridTable(spec, rows, spec.columns, onSort, st.sort || { field: '' }, !drawn)
           : emptyState('search', 'No matches', 'Try a different search or clear the filters.', el('button', { class: 'btn', onclick: () => { st.q = ''; st.chip = ''; searchInput.value = ''; draw(); syncChips(); } }, 'Clear filters')),
         el('div', { class: 'grid-foot' }, el('span', {}, `Showing ${rows.length} of ${base.length}`), recs.length >= 500 ? el('span', {}, 'First 500 records loaded') : el('span', {}, '')));
-      stagger(body);
+      if (!drawn) stagger(body);
+      drawn = true;
     }
     searchInput.addEventListener('input', () => { st.q = searchInput.value; draw(); });
     draw();
+    // Build the search index while the browser is idle so the first keystroke is instant
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
+    idle(() => base.forEach((r) => searchText(spec, r)));
     return el('div', {}, head, toolbar, body);
   }
 
@@ -803,6 +814,7 @@
   // Linked records: every table with a link field pointing at this table
   async function relatedSection(spec, rec) {
     const groups = [];
+    await Promise.all(specs.filter((s) => Object.keys(schemaOf(s)).some((k) => typeOf(s, k).target === spec.reg.id)).map((s) => load(s)));
     for (const s of specs) {
       for (const k of Object.keys(schemaOf(s))) {
         const t = typeOf(s, k);
@@ -1103,7 +1115,7 @@
     $$('.tally-n[data-n]', root).forEach((n) => {
       const target = Number(n.dataset.n) || 0;
       if (!target || reduceMotion()) return;
-      const t0 = performance.now(), dur = 900;
+      const t0 = performance.now(), dur = 520;
       const step = (t) => {
         const k = Math.min(1, (t - t0) / dur);
         const eased = 1 - Math.pow(1 - k, 3);
@@ -1115,23 +1127,34 @@
     });
   }
   function wireMotion() {
-    let raf = 0, lastEvt = null;
+    const bg = $('#bg');
+    let raf = 0, lastEvt = null, tilted = null;
     const frame = () => {
       raf = 0;
       const e = lastEvt;
       if (!e) return;
-      // Marble slab + orb parallax
+      // Background drift: transform on its own layer, no style recalculation
       const px = e.clientX / innerWidth - .5, py = e.clientY / innerHeight - .5;
-      document.body.style.setProperty('--px', px.toFixed(3));
-      document.body.style.setProperty('--py', py.toFixed(3));
-      const orb = $('.orb');
-      if (orb) { orb.style.setProperty('--ox', (px * 2).toFixed(3)); orb.style.setProperty('--oy', (py * 2).toFixed(3)); }
+      bg.style.transform = `translate3d(${(-px * 10).toFixed(1)}px, ${(-py * 10).toFixed(1)}px, 0)`;
+      const target = e.target instanceof Element ? e.target : null;
       // Spotlight on the panel under the pointer
-      const card = e.target.closest && e.target.closest('.card');
+      const card = target && target.closest('.card');
       if (card) {
         const r = card.getBoundingClientRect();
         card.style.setProperty('--mx', `${e.clientX - r.left}px`);
         card.style.setProperty('--my', `${e.clientY - r.top}px`);
+      }
+      // 3D tilt with glare
+      const t = target && target.closest('[data-tilt]');
+      if (tilted && tilted !== t) { tilted.style.transition = 'transform .5s cubic-bezier(.34,1.56,.64,1)'; tilted.style.transform = ''; }
+      tilted = t;
+      if (t) {
+        const r = t.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
+        t.style.transition = 'transform .12s ease-out';
+        t.style.transform = `perspective(700px) rotateX(${((.5 - y) * 14).toFixed(2)}deg) rotateY(${((x - .5) * 16).toFixed(2)}deg) translateZ(6px)`;
+        t.style.setProperty('--gx', `${(x * 100).toFixed(1)}%`);
+        t.style.setProperty('--gy', `${(y * 100).toFixed(1)}%`);
       }
     };
     document.addEventListener('pointermove', (e) => {
@@ -1139,24 +1162,8 @@
       lastEvt = e;
       if (!raf) raf = requestAnimationFrame(frame);
     }, { passive: true });
-
-    // 3D tilt with glare on [data-tilt]
-    document.addEventListener('pointermove', (e) => {
-      if (e.pointerType === 'touch' || reduceMotion()) return;
-      const t = e.target.closest && e.target.closest('[data-tilt]');
-      if (!t) return;
-      const r = t.getBoundingClientRect();
-      const x = (e.clientX - r.left) / r.width, y = (e.clientY - r.top) / r.height;
-      t.style.transition = 'transform .12s ease-out';
-      t.style.transform = `perspective(700px) rotateX(${(.5 - y) * 14}deg) rotateY(${(x - .5) * 16}deg) translateZ(6px)`;
-      t.style.setProperty('--gx', `${x * 100}%`);
-      t.style.setProperty('--gy', `${y * 100}%`);
-    }, { passive: true });
-    document.addEventListener('pointerout', (e) => {
-      const t = e.target.closest && e.target.closest('[data-tilt]');
-      if (!t || (e.relatedTarget && t.contains(e.relatedTarget))) return;
-      t.style.transition = 'transform .6s cubic-bezier(.34,1.56,.64,1)';
-      t.style.transform = '';
+    document.addEventListener('pointerleave', () => {
+      if (tilted) { tilted.style.transform = ''; tilted = null; }
     });
 
     // Ripple on buttons
@@ -1197,6 +1204,9 @@
     wireChrome();
     wireMotion();
     applyTheme();
+    if ('serviceWorker' in navigator && location.protocol === 'https:') {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
     const pill = $('#modePill');
     try {
       await api('GET', '/api/health');
