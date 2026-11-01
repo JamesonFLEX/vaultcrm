@@ -107,7 +107,7 @@
     const dark = isDark();
     $('#themeBtn').replaceChildren(icon(dark ? 'sun' : 'moon'));
     $('#themeBtn').setAttribute('aria-label', dark ? 'Switch to light theme' : 'Switch to dark theme');
-    $('meta[name="theme-color"]').setAttribute('content', dark ? '#050505' : '#E7E3DE');
+    $('meta[name="theme-color"]').setAttribute('content', dark ? '#030916' : '#E3E9F2');
   }
   const isDark = () => settings.theme ? settings.theme === 'dark' : matchMedia('(prefers-color-scheme: dark)').matches;
 
@@ -1042,72 +1042,72 @@
     const q = settings.queues;
     const Q = (i) => q[i % q.length];
     return [
-      ['users', 'u1', { name: 'Avery Cole', role: 'Production', email: 'avery@example.com', phone: '916-555-0101', active: true }],
+      ['users', 'u1', { name: 'Avery Cole', role: 'Sales', email: 'avery@example.com', phone: '916-555-0101', active: true }],
       ['users', 'u2', { name: 'Morgan Reyes', role: 'Sales', email: 'morgan@example.com', phone: '916-555-0102', active: true }],
-      ['users', 'u3', { name: 'Sam Patel', role: 'Support', email: 'sam@example.com', phone: '916-555-0103', active: true }],
+      ['users', 'u3', { name: 'Sam Patel', role: 'Production', email: 'sam@example.com', phone: '916-555-0103', active: true }],
 
-      ['companies', 'c1', { company_name: 'Blue Harbor Dental', status: 'Active', phone: '916-555-0140', website: 'https://example.com/blue-harbor', industry: 'Dental', notes: 'Sample customer. Two offices, wants seasonal greetings rotated quarterly.' }],
-      ['companies', 'c2', { company_name: 'Summit Ridge Auto Care', status: 'Active', phone: '916-555-0150', website: 'https://example.com/summit-ridge', industry: 'Auto repair', notes: 'Sample customer. Promotes tire specials and service reminders on hold.' }],
-      ['companies', 'c3', { company_name: 'Oakline Pizza Co.', status: 'Lead', phone: '916-555-0160', website: 'https://example.com/oakline', industry: 'Restaurant', notes: 'Sample lead. Interested in a holiday ordering message.' }],
+      ['companies', 'c1', { company_name: 'Martinez Residence', status: 'Lead', phone: '916-555-0140', industry: 'Residential solar', notes: 'Sample homeowner. South-facing roof, wants a lower PG&E bill with no upfront cost.' }],
+      ['companies', 'c2', { company_name: 'Nguyen Residence', status: 'Active', phone: '916-555-0150', industry: 'Residential solar', notes: 'Sample homeowner. Asked about adding a battery for outages.' }],
+      ['companies', 'c3', { company_name: 'Hillcrest Family Dental', status: 'Lead', phone: '916-555-0160', website: 'https://example.com/hillcrest', industry: 'Commercial solar', notes: 'Sample business. Owns the building; flat roof.' }],
 
-      ['locations', 'l1', { location_name: 'Blue Harbor — Midtown', company: '@c1', address: '100 Sample St', city: 'Sacramento', state: 'CA', zip: '95811', phone: '916-555-0141' }],
-      ['locations', 'l2', { location_name: 'Blue Harbor — Folsom', company: '@c1', address: '200 Example Ave', city: 'Folsom', state: 'CA', zip: '95630', phone: '916-555-0142' }],
-      ['locations', 'l3', { location_name: 'Summit Ridge — Roseville', company: '@c2', address: '300 Placeholder Blvd', city: 'Roseville', state: 'CA', zip: '95661', phone: '916-555-0151' }],
-      ['locations', 'l4', { location_name: 'Oakline — Rocklin', company: '@c3', address: '400 Demo Way', city: 'Rocklin', state: 'CA', zip: '95677', phone: '916-555-0161' }],
+      ['locations', 'l1', { location_name: 'Martinez — Roseville home', company: '@c1', address: '100 Sample St', city: 'Roseville', state: 'CA', zip: '95661' }],
+      ['locations', 'l2', { location_name: 'Nguyen — Rocklin home', company: '@c2', address: '200 Example Ave', city: 'Rocklin', state: 'CA', zip: '95677' }],
+      ['locations', 'l3', { location_name: 'Hillcrest — Auburn office', company: '@c3', address: '300 Placeholder Blvd', city: 'Auburn', state: 'CA', zip: '95603', phone: '916-555-0161' }],
+      ['locations', 'l4', { location_name: 'Nguyen — rental property', company: '@c2', address: '400 Demo Way', city: 'Lincoln', state: 'CA', zip: '95648' }],
 
-      ['contacts', 'p1', { first_name: 'Dana', last_name: 'Brooks', company: '@c1', location: '@l1', job_title: 'Office manager', email: 'dana@example.com', phone: '916-555-0143' }],
-      ['contacts', 'p2', { first_name: 'Chris', last_name: 'Nguyen', company: '@c2', location: '@l3', job_title: 'Owner', email: 'chris@example.com', phone: '916-555-0152' }],
-      ['contacts', 'p3', { first_name: 'Riley', last_name: 'Shaw', company: '@c3', location: '@l4', job_title: 'General manager', email: 'riley@example.com', phone: '916-555-0162' }],
+      ['contacts', 'p1', { first_name: 'Dana', last_name: 'Martinez', company: '@c1', location: '@l1', job_title: 'Homeowner', email: 'dana@example.com', phone: '916-555-0143' }],
+      ['contacts', 'p2', { first_name: 'Chris', last_name: 'Nguyen', company: '@c2', location: '@l2', job_title: 'Homeowner', email: 'chris@example.com', phone: '916-555-0152' }],
+      ['contacts', 'p3', { first_name: 'Riley', last_name: 'Shaw', company: '@c3', location: '@l3', job_title: 'Practice owner', email: 'riley@example.com', phone: '916-555-0162' }],
 
-      ['vendors', 'v1', { vendor_name: 'Sample Voice Talent Co.', service: 'Voice talent', contact_name: 'Jordan Lee', email: 'voices@example.com', phone: '916-555-0170', website: 'https://example.com/voices' }],
-      ['vendors', 'v2', { vendor_name: 'Placeholder Music Library', service: 'Licensed music beds', contact_name: 'Taylor Kim', email: 'music@example.com', website: 'https://example.com/music' }],
+      ['vendors', 'v1', { vendor_name: 'Sample Panel Supply Co.', service: 'Panels & inverters', contact_name: 'Jordan Lee', email: 'supply@example.com', phone: '916-555-0170', website: 'https://example.com/supply' }],
+      ['vendors', 'v2', { vendor_name: 'Placeholder Permit Services', service: 'Permitting', contact_name: 'Taylor Kim', email: 'permits@example.com', website: 'https://example.com/permits' }],
 
-      ['projects', 'j1', { project_title: 'Winter greeting refresh', status: 'Production', queue: Q(2), assigned_to: '@u1', company: '@c1', project_type: 'Production only', date_due: day(-2), url: 'https://example.com/scripts/winter', url_details: 'Approved script', project_attachment: 'https://example.com/audio/blue-harbor-winter-v2.wav' }],
-      ['projects', 'j2', { project_title: 'New hold loop — 2 locations', status: 'Scripting', queue: Q(0), assigned_to: '@u1', company: '@c1', project_type: 'Implementation', date_due: day(5) }],
-      ['projects', 'j3', { project_title: 'Tire special promo', status: 'Review', queue: Q(4), assigned_to: '@u2', company: '@c2', project_type: 'Script update', date_due: day(3), url: 'https://example.com/scripts/tires' }],
-      ['projects', 'j4', { project_title: 'Service reminder spots', status: 'Intake', queue: Q(1), assigned_to: '@u3', company: '@c2', project_type: 'Production only', date_due: day(10) }],
-      ['projects', 'j5', { project_title: 'Holiday ordering message', status: 'Intake', queue: Q(4), assigned_to: '@u2', company: '@c3', project_type: 'Any', date_due: day(14) }],
-      ['projects', 'j6', { project_title: 'Billing setup for new account', status: 'On hold', queue: Q(3), assigned_to: '@u3', company: '@c3', project_type: 'Implementation', date_due: day(7) }],
-      ['projects', 'j7', { project_title: 'Fall promo audio', status: 'Delivered', queue: Q(2), assigned_to: '@u1', company: '@c2', project_type: 'Production only', date_due: day(-12), project_attachment: 'https://example.com/audio/summit-fall.wav' }],
+      ['deals', 'd1', { deal_name: 'Martinez — 7.2 kW PPA', stage: 'Demo set', value: 24000, company: '@c1', contact: '@p1', owner: '@u2', source: 'Door knock', follow_up: day(0), next_step: 'Kitchen-table appointment, review 12 months of bills' }],
+      ['deals', 'd2', { deal_name: 'Nguyen — 9.6 kW + battery', stage: 'Proposal sent', value: 38000, company: '@c2', contact: '@p2', owner: '@u1', source: 'Referral', follow_up: day(-1), next_step: 'Call Chris about the battery option' }],
+      ['deals', 'd3', { deal_name: 'Hillcrest Dental — 40 kW rooftop', stage: 'Negotiation', value: 92000, company: '@c3', contact: '@p3', owner: '@u1', source: 'Cold call', follow_up: day(2), next_step: 'Confirm roof load with installer' }],
+      ['deals', 'd4', { deal_name: 'Carter home — bill review', stage: 'New lead', value: 21000, owner: '@u2', source: 'Flyer', follow_up: day(1), next_step: 'First call, ask for a recent bill' }],
+      ['deals', 'd5', { deal_name: 'Lopez home — roof check', stage: 'Contacted', value: 18000, owner: '@u2', source: 'Door knock', follow_up: day(-3), next_step: 'Both decision-makers home after 6pm' }],
+      ['deals', 'd6', { deal_name: 'Patel residence — 6.4 kW PPA', stage: 'Won', value: 22000, owner: '@u1', source: 'Referral', close_date: day(0) }],
+      ['deals', 'd7', { deal_name: 'Brooks home', stage: 'Lost', value: 19000, owner: '@u2', source: 'Door knock', close_date: day(-10), notes: 'Roof too shaded.' }],
 
-      ['indi_projects', 'i1', { project_title: 'Rebuild music bed library index', status: 'Production', assigned_to: '@u1', date_due: day(6) }],
-      ['indi_projects', 'i2', { project_title: 'Voice talent sample reel', status: 'Scripting', assigned_to: '@u2', company: '@c1', date_due: day(9) }],
-
-      ['scripts_mail', 'm1', { subject: 'Winter script edits', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Thank you for calling Blue Harbor Dental. Your smile is our priority — please stay on the line and the next available team member will be with you shortly.' }],
-      ['scripts_mail', 'm2', { subject: 'Holiday hours copy', status: 'New', company: '@c3', contact: '@p3', received: day(-1), script: 'Thanks for calling Oakline Pizza Co. Ask about our holiday family meal deals.' }],
-
-      ['scripts_sent', 's1', { subject: 'Tire promo script — draft 2', company: '@c2', sent_to: 'chris@example.com', date_sent: day(-2), script: 'Thanks for holding with Summit Ridge Auto Care. Ask your service advisor about this month’s tire special.' }],
-      ['scripts_sent', 's2', { subject: 'Winter greeting — final', company: '@c1', sent_to: 'dana@example.com', date_sent: day(-5) }],
-
-      ['scriptbuilders', 'b1', { title: 'Dental scriptbuilder', kind: 'Scriptbuilder', pdf_link: 'https://example.com/pdfs/dental-scriptbuilder.pdf', date: day(-20) }],
-      ['scriptbuilders', 'b2', { title: 'Holiday promo blast', kind: 'Blast', pdf_link: 'https://example.com/pdfs/holiday-blast.pdf', date: day(-4) }],
-
-      ['calendar', 'e1', { title: 'Studio session — Blue Harbor', date: day(1), time: '10:00 AM', assigned_to: '@u1', company: '@c1' }],
-      ['calendar', 'e2', { title: 'Script review call', date: day(3), time: '2:30 PM', assigned_to: '@u2', company: '@c2' }],
-      ['calendar', 'e3', { title: 'Install check-in', date: day(8), time: '9:00 AM', assigned_to: '@u3', company: '@c1' }],
-      ['calendar', 'e4', { title: 'Team production meeting', date: day(0), time: '4:00 PM' }],
-
-      ['sales_events', 'x1', { event: 'Oakline demo + proposal', date: day(4), status: 'Planned', company: '@c3', value: 1200 }],
-      ['sales_events', 'x2', { event: 'Summit Ridge renewal', date: day(-6), status: 'Done', company: '@c2', value: 2400 }],
-
-      ['deals', 'd1', { deal_name: 'Oakline — on-hold package', stage: 'Demo set', value: 1200, company: '@c3', contact: '@p3', owner: '@u2', source: 'Door knock', follow_up: day(0), next_step: 'Play voice + music options' }],
-      ['deals', 'd2', { deal_name: 'Summit Ridge — 2nd location', stage: 'Proposal sent', value: 900, company: '@c2', contact: '@p2', owner: '@u2', source: 'Referral', follow_up: day(-1), next_step: 'Call Chris about the proposal' }],
-      ['deals', 'd3', { deal_name: 'Blue Harbor — seasonal rotation', stage: 'Negotiation', value: 600, company: '@c1', contact: '@p1', owner: '@u1', source: 'Existing customer', follow_up: day(2), next_step: 'Confirm quarterly pricing' }],
-      ['deals', 'd4', { deal_name: 'Valley Vet Clinic', stage: 'New lead', value: 1500, owner: '@u2', source: 'Cold call', follow_up: day(1), next_step: 'First call' }],
-      ['deals', 'd5', { deal_name: 'Golden Hills Chiropractic', stage: 'Contacted', value: 1100, owner: '@u1', source: 'Flyer', follow_up: day(-3), next_step: 'Get past the front desk' }],
-      ['deals', 'd6', { deal_name: 'Summit Ridge renewal', stage: 'Won', value: 2400, company: '@c2', contact: '@p2', owner: '@u2', source: 'Existing customer', close_date: day(0) }],
-      ['deals', 'd7', { deal_name: 'Pine Street Bakery', stage: 'Lost', value: 700, owner: '@u1', source: 'Door knock', close_date: day(-10) }],
-
-      ['activities', 'a1', { subject: 'Door knock — Demo set', type: 'Door knock', outcome: 'Demo set', deal: '@d1', company: '@c3', contact: '@p3', rep: '@u2', date: day(-2) }],
-      ['activities', 'a2', { subject: 'Call — Gatekeeper', type: 'Call', outcome: 'Gatekeeper', deal: '@d5', rep: '@u1', date: day(-1) }],
-      ['activities', 'a3', { subject: 'Email — Proposal sent', type: 'Email', outcome: 'Proposal sent', deal: '@d2', company: '@c2', contact: '@p2', rep: '@u2', date: day(-3) }],
+      ['activities', 'a1', { subject: 'Door knock — Demo set', type: 'Door knock', outcome: 'Demo set', deal: '@d1', company: '@c1', contact: '@p1', rep: '@u2', date: day(-2) }],
+      ['activities', 'a2', { subject: 'Door knock — Gatekeeper', type: 'Door knock', outcome: 'Gatekeeper', deal: '@d5', rep: '@u2', date: day(-1), notes: 'Spouse not home.' }],
+      ['activities', 'a3', { subject: 'Email — Proposal sent', type: 'Email', outcome: 'Proposal sent', deal: '@d2', company: '@c2', contact: '@p2', rep: '@u1', date: day(-3) }],
       ['activities', 'a4', { subject: 'Call — No answer', type: 'Call', outcome: 'No answer', deal: '@d4', rep: '@u2', date: day(0) }],
-      ['activities', 'a5', { subject: 'Meeting — Sold', type: 'Meeting', outcome: 'Sold', deal: '@d6', company: '@c2', rep: '@u2', date: day(0) }],
-      ['activities', 'a6', { subject: 'Meeting — Callback set', type: 'Meeting', outcome: 'Callback set', deal: '@d3', company: '@c1', contact: '@p1', rep: '@u1', date: day(-1) }],
+      ['activities', 'a5', { subject: 'Meeting — Sold', type: 'Meeting', outcome: 'Sold', deal: '@d6', rep: '@u1', date: day(0) }],
+      ['activities', 'a6', { subject: 'Meeting — Callback set', type: 'Meeting', outcome: 'Callback set', deal: '@d3', company: '@c3', contact: '@p3', rep: '@u1', date: day(-1) }],
+
+      ['projects', 'j1', { project_title: 'Martinez — site survey', status: 'Intake', queue: Q(0), assigned_to: '@u3', company: '@c1', date_due: day(4) }],
+      ['projects', 'j2', { project_title: 'Nguyen — system design', status: 'Production', queue: Q(2), assigned_to: '@u3', company: '@c2', date_due: day(-2), url: 'https://example.com/designs/nguyen', url_details: 'Design draft' }],
+      ['projects', 'j3', { project_title: 'Nguyen — permit packet', status: 'Review', queue: Q(1), assigned_to: '@u3', company: '@c2', date_due: day(6) }],
+      ['projects', 'j4', { project_title: 'Hillcrest — roof load check', status: 'Intake', queue: Q(2), assigned_to: '@u1', company: '@c3', date_due: day(3) }],
+      ['projects', 'j5', { project_title: 'Hillcrest — utility interconnection', status: 'On hold', queue: Q(3), assigned_to: '@u3', company: '@c3', date_due: day(14) }],
+      ['projects', 'j6', { project_title: 'Martinez — financing paperwork', status: 'Intake', queue: Q(4), assigned_to: '@u2', company: '@c1', date_due: day(7) }],
+      ['projects', 'j7', { project_title: 'Nguyen — rental system activated', status: 'Delivered', queue: Q(2), assigned_to: '@u3', company: '@c2', date_due: day(-12) }],
+
+      ['indi_projects', 'i1', { project_title: 'Update door-knock talk track', status: 'Production', assigned_to: '@u2', date_due: day(6) }],
+      ['indi_projects', 'i2', { project_title: 'Plan Rocklin flyer route', status: 'Intake', assigned_to: '@u2', date_due: day(9) }],
+
+      ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Homeowner sent the last 12 months of PG&E bills for the proposal.' }],
+      ['scripts_mail', 'm2', { subject: 'Battery questions — Nguyen', status: 'New', company: '@c2', contact: '@p2', received: day(-1), script: 'Wants to know how a battery works during an outage.' }],
+
+      ['scripts_sent', 's1', { subject: 'Proposal — Nguyen 9.6 kW + battery', company: '@c2', sent_to: 'chris@example.com', date_sent: day(-3) }],
+      ['scripts_sent', 's2', { subject: 'Next steps — Hillcrest', company: '@c3', sent_to: 'riley@example.com', date_sent: day(-5) }],
+
+      ['scriptbuilders', 'b1', { title: 'Residential door-knock pitch', kind: 'Scriptbuilder', pdf_link: 'https://example.com/pdfs/door-knock-pitch.pdf', date: day(-20) }],
+      ['scriptbuilders', 'b2', { title: 'Neighborhood flyer blast', kind: 'Blast', pdf_link: 'https://example.com/pdfs/flyer-blast.pdf', date: day(-4) }],
+
+      ['calendar', 'e1', { title: 'Appointment — Martinez', date: day(0), time: '6:30 PM', assigned_to: '@u2', company: '@c1' }],
+      ['calendar', 'e2', { title: 'Site survey — Martinez', date: day(4), time: '10:00 AM', assigned_to: '@u3', company: '@c1' }],
+      ['calendar', 'e3', { title: 'Roof walk — Hillcrest', date: day(3), time: '9:00 AM', assigned_to: '@u1', company: '@c3' }],
+      ['calendar', 'e4', { title: 'Team sales meeting', date: day(1), time: '8:30 AM' }],
+
+      ['sales_events', 'x1', { event: 'Rocklin neighborhood blitz', date: day(5), status: 'Planned' }],
+      ['sales_events', 'x2', { event: 'Roseville home show booth', date: day(-6), status: 'Done' }],
 
       ['notepad', 'n1', { title: 'Sample data', body: 'Everything you see right now is fictional placeholder data. Remove it in Settings → Sample data before importing real records.', pinned: true }],
-      ['notepad', 'n2', { title: 'Hold message checklist', body: 'Confirm hours\nConfirm promo end date\nPick voice + music bed\nSend script for approval' }],
-      ['notepad', 'n3', { title: 'Ideas', body: 'Seasonal greeting rotation offer for multi-location accounts.' }]
+      ['notepad', 'n2', { title: 'Appointment checklist', body: 'Get 12 months of utility bills\nCheck roof age and shade\nBoth decision-makers present\nWalk through the agreement terms' }],
+      ['notepad', 'n3', { title: 'Ideas', body: 'Ask every closed customer for two neighbor referrals.' }]
     ];
   }
 
@@ -1292,7 +1292,7 @@
         el('div', { class: 'wide field' }, el('span', {}, 'Sample data'),
           el('p', { class: 'hint', style: 'margin:0' }, hasSample()
             ? 'Fictional placeholder records are loaded. Remove them before importing real data. Records you added yourself stay.'
-            : 'Fill every tab with 3 fictional customers and their projects, contacts, events and notes to try things out.'),
+            : 'Fill every tab with fictional solar customers, deals, installs, events and notes to try things out.'),
           el('div', { class: 'actions-row' }, hasSample()
             ? el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')
             : el('button', { class: 'btn', type: 'button', onclick: (e) => runSample(e.currentTarget, true) }, icon('plus'), 'Load sample data'))),
