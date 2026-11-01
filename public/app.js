@@ -467,7 +467,7 @@
       const n = open.filter((r) => r.payload.queue === q).length;
       return el('button', { class: 'tally-btn' + (n ? ' live' : ''), 'data-tilt': true, onclick: () => go('#/t/projects?queue=' + encodeURIComponent(q)), 'aria-label': `${q}: ${n} open` },
         el('span', { class: 'tally-top' }, el('span', { class: 'led' })),
-        el('span', {}, el('span', { class: 'tally-n', 'data-n': n }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, q)));
+        el('span', {}, el('span', { class: 'tally-n', 'data-n': n }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, String(q).replace(/\//g, '/\u200B'))));
     }));
     const queues = el('section', { class: 'card span-12 reveal' },
       el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Queues'),
