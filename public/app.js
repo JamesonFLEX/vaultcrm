@@ -1,10 +1,9 @@
 /* =====================================================================
-   VaultCRM :: Workspace app
-   Tabs mirror an ops workspace: Home, Users, Companies, Locations,
-   Contacts, Projects, Indi projects, Scripts mail, Calendar,
-   Scriptbuilders & blasts, Sales events, Vendors, Notepad,
-   Scripts sent mail, New table. Works in browser mode (GitHub Pages)
-   and server mode (Express + Postgres) through the same API.
+   VaultCRM :: Residential solar sales workspace
+   Home (quick access + customer journey), Sales pipeline, Activities,
+   Homeowners, Properties, Contacts, Installs (site survey → PTO), Calendar,
+   Canvass events, Partners, Notepad, custom tables. Works in browser mode
+   (GitHub Pages) and server mode (Express + Postgres) through the same API.
    ===================================================================== */
 (() => {
   'use strict';
@@ -69,7 +68,10 @@
     phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z',
     board: 'M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z',
     trophy: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4',
-    check: 'M5 12.5l4.5 4.5L19 7.5'
+    check: 'M5 12.5l4.5 4.5L19 7.5',
+    userPlus: 'M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6',
+    door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01M9 7h6',
+    bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0'
   };
   function icon(name, cls = 'i') {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -144,8 +146,9 @@
   // Workspace definition
   // ---------------------------------------------------------------------
   const APP = 'Workspace';
-  const STATUS = 'CHOICE:Site survey|Design|Permit|Install|Inspection|PTO|On hold';
-  const STAGE_LIST = ['New lead', 'Contacted', 'Appointment set', 'Proposal sent', 'Negotiation', 'Won', 'Lost'];
+  const STATUS = 'CHOICE:Site survey|Design|Permit|Install|Inspection|PTO|Paused';
+  const STAGE_LIST = ['New lead', 'Follow-up', 'Appointment set', 'Proposal sent', 'Sold', 'Lost'];
+  const INSTALL_STEPS = ['Site survey', 'Design', 'Permit', 'Install', 'Inspection', 'PTO'];
   const STAGES = 'CHOICE:' + STAGE_LIST.join('|');
   const OUTCOMES = ['No answer', 'Left voicemail', 'Not home', 'Callback set', 'Appointment set', 'Proposal sent', 'Sold', 'Not interested'];
   const ACT_TYPES = ['Door knock', 'Call', 'Text', 'Email', 'Appointment', 'Follow-up visit'];
@@ -174,7 +177,8 @@
     { key: 'vendors', table: 'Vendors', label: 'Partners', single: 'partner', icon: 'truck', group: 'Directory',
       fields: [f('vendor_name', 'TEXT', { label: 'Partner' }), f('service', 'TEXT'), f('contact_name', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('website', 'URL'), f('notes', 'LONGTEXT')],
       title: (p) => p.vendor_name, columns: ['vendor_name', 'service', 'contact_name', 'email', 'phone'] },
-    { key: 'deals', table: 'Deals', label: 'Deals', single: 'deal', icon: 'target', group: 'Sales', view: 'board', boardField: 'stage',
+    { key: 'deals', table: 'Deals', label: 'Sales pipeline', single: 'deal', icon: 'target', group: 'Sales', view: 'board', boardField: 'stage',
+      card: { due: 'follow_up', dueWord: 'Follow up', owner: 'owner', sub: 'company', note: 'next_step', value: 'value' },
       fields: [f('deal_name', 'TEXT'), f('stage', STAGES), f('value', 'NUMBER', { label: 'Contract value ($)' }), f('system_size_kw', 'NUMBER', { label: 'System size (kW)' }),
         f('financing', 'CHOICE:PPA|Lease|Loan|Cash'), f('battery', 'BOOLEAN', { label: 'Battery' }),
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'),
@@ -185,10 +189,12 @@
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
       title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date'], sort: { field: 'date', dir: -1 } },
-    { key: 'projects', table: 'Projects', label: 'Installs', single: 'install', icon: 'folder', group: 'Installs',
+    { key: 'projects', table: 'Projects', label: 'Installs', single: 'install', icon: 'sun', group: 'Installs', view: 'board', boardField: 'status',
+      card: { due: 'date_due', dueWord: 'Due', owner: 'assigned_to', sub: 'company', note: 'url_details', value: null, stepOffset: 5 },
       fields: [f('project_title', 'TEXT', { label: 'Install' }), f('status', STATUS, { label: 'Step' }), f('queue', 'TEXT', { ui: 'queue', label: 'Team' }), f('assigned_to', 'REF:@users'),
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('project_type', 'CHOICE:Solar|Solar + battery|Battery only|Panel upgrade', { label: 'System type' }), f('date_due', 'DATE'),
-        f('url', 'URL', { label: 'Design / plans link' }), f('url_details', 'TEXT', { label: 'Link notes' }), f('project_attachment', 'URL', { label: 'Permit / docs link' }), f('notes', 'LONGTEXT')],
+        f('url', 'URL', { label: 'Design / plans link' }), f('url_details', 'TEXT', { label: 'Link notes' }), f('project_attachment', 'URL', { label: 'Permit / docs link' }), f('notes', 'LONGTEXT'),
+        f('deal', 'REF:@deals', { label: 'Sold deal' })],
       title: (p) => p.project_title,
       columns: ['status', 'assigned_to', 'company', 'project_title', 'project_type', 'date_due', 'url', 'project_attachment'],
       sort: { field: 'date_due', dir: 1 } },
@@ -202,7 +208,7 @@
       fields: [f('subject', 'TEXT'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('sent_to', 'EMAIL'), f('date_sent', 'DATE'), f('script', 'LONGTEXT', { label: 'Notes' })],
       title: (p) => p.subject, columns: ['subject', 'company', 'sent_to', 'date_sent'] },
     { key: 'scriptbuilders', table: 'Scriptbuilders & Blasts', label: 'Pitch & flyer PDFs', single: 'PDF', icon: 'layers', group: 'Sales',
-      fields: [f('title', 'TEXT'), f('kind', 'CHOICE:Scriptbuilder|Blast|Pitch|Flyer|Training', { label: 'Type' }), f('pdf_link', 'URL', { label: 'PDF link' }), f('date', 'DATE'), f('notes', 'LONGTEXT')],
+      fields: [f('title', 'TEXT'), f('kind', 'CHOICE:Pitch|Flyer|Door hanger|Training', { label: 'Type' }), f('pdf_link', 'URL', { label: 'PDF link' }), f('date', 'DATE'), f('notes', 'LONGTEXT')],
       title: (p) => p.title, columns: ['title', 'kind', 'pdf_link', 'date'] },
     { key: 'calendar', table: 'Calendar', label: 'Calendar', single: 'event', icon: 'calendar', group: 'Schedule', view: 'calendar', dateField: 'date',
       fields: [f('title', 'TEXT'), f('date', 'DATE'), f('time', 'TEXT'), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('notes', 'LONGTEXT')],
@@ -218,11 +224,12 @@
   const MIGRATE = {
     users: { role: { Sales: 'Closer', Production: 'Install coordinator', Billing: 'Support' } },
     companies: { status: { Active: 'Customer', Inactive: 'Past customer' } },
-    deals: { stage: { 'Demo set': 'Appointment set' } },
+    deals: { stage: { 'Demo set': 'Appointment set', Contacted: 'Follow-up', Negotiation: 'Proposal sent', Won: 'Sold' } },
+    scriptbuilders: { kind: { Scriptbuilder: 'Pitch', Blast: 'Flyer' } },
     activities: { outcome: { 'Demo set': 'Appointment set', Gatekeeper: 'Not home' }, type: { Meeting: 'Appointment', Demo: 'Appointment' } },
-    projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO' },
+    projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO', 'On hold': 'Paused' },
       project_type: { Implementation: null, 'Production only': null, 'Script update': null, Any: null } },
-    indi_projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO' } }
+    indi_projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO', 'On hold': 'Paused' } }
   };
   const GROUPS = ['Sales', 'Directory', 'Installs', 'Schedule', 'Notes', 'Custom'];
   const BOTTOM = ['home', 'deals', 'projects', 'calendar'];
@@ -340,7 +347,7 @@
   // Value display
   // ---------------------------------------------------------------------
   const HUES = { delivered: 150, done: 150, active: 150, 'in progress': 210, production: 36, scripting: 265, review: 190, intake: 220,
-    lead: 285, new: 210, 'new lead': 220, contacted: 200, 'appointment set': 265, 'not home': 45, 'site survey': 220, design: 265, permit: 36, install: 200, inspection: 190, pto: 150, customer: 150, 'past customer': 0, 'not a fit': 0, 'proposal sent': 36, negotiation: 320, won: 150, lost: 0, sold: 150, 'not interested': 0, 'no answer': 30, 'left voicemail': 30, gatekeeper: 45, 'callback set': 190, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
+    lead: 285, new: 210, 'new lead': 220, contacted: 200, 'follow-up': 190, sold: 150, paused: 8, 'appointment set': 265, 'not home': 45, 'site survey': 220, design: 265, permit: 36, install: 200, inspection: 190, pto: 150, customer: 150, 'past customer': 0, 'not a fit': 0, 'proposal sent': 36, negotiation: 320, won: 150, lost: 0, sold: 150, 'not interested': 0, 'no answer': 30, 'left voicemail': 30, gatekeeper: 45, 'callback set': 190, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
   function hue(s) {
     const k = String(s).toLowerCase();
     if (k in HUES) return HUES[k];
@@ -361,7 +368,7 @@
     if (y !== new Date().getFullYear()) opts.year = 'numeric';
     return dt.toLocaleDateString(undefined, opts);
   }
-  const DONE = new Set(['Delivered', 'PTO', 'Done', 'Cancelled', 'Won', 'Lost']);
+  const DONE = new Set(['Delivered', 'PTO', 'Done', 'Cancelled', 'Won', 'Sold', 'Lost']);
   const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 
   function display(spec, field, rec) {
@@ -463,7 +470,7 @@
         const s = byKey[k];
         const cur = (k === 'home' && r.name === 'home') || (r.name === 'table' && r.key === k);
         return el('button', { 'aria-current': cur ? 'page' : null, onclick: () => go(k === 'home' ? '#/' : '#/t/' + k) },
-          icon(k === 'home' ? 'home' : s.icon), k === 'home' ? 'Home' : (k === 'calendar' ? 'Calendar' : s.label));
+          icon(k === 'home' ? 'home' : s.icon), k === 'home' ? 'Home' : k === 'calendar' ? 'Calendar' : k === 'deals' ? 'Pipeline' : s.label);
       }),
       el('button', { onclick: openRail }, icon('more'), 'More')
     );
@@ -509,7 +516,7 @@
   async function renderHome() {
     setCrumbs(settings.workspace || 'Workspace', 'Home');
     const projects = byKey.projects;
-    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts), load(byKey.deals), load(byKey.activities)]);
+    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts), load(byKey.deals), load(byKey.activities), load(byKey.calendar)]);
     const all = cache.projects;
     const open = all.filter((r) => !DONE.has(r.payload.status));
 
@@ -518,11 +525,9 @@
       el('div', { class: 'home-logo', 'aria-hidden': 'true' }, el('img', { src: 'img/vault-logo.svg', width: 112, height: 112, alt: '', decoding: 'async' }), el('span', {}, 'VAULT')),
       el('div', { style: 'position:relative;z-index:1' },
         el('div', { class: 'eyebrow' }, now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })),
-        el('h1', { class: 'page-title' }, settings.name ? `${settings.name}'s homepage` : 'Homepage')),
-      el('div', { class: 'page-actions' },
-        el('button', { class: 'btn primary', onclick: () => openRecord(byKey.deals, null, { stage: 'New lead', owner: settings.meId || undefined, follow_up: todayISO() }) }, icon('plus'), 'New deal'),
-        el('button', { class: 'btn', onclick: () => openRecord(projects, null, { assigned_to: settings.meId || undefined, status: 'Site survey' }) }, icon('plus'), 'New install'))
+        el('h1', { class: 'page-title' }, settings.name ? `Let's go, ${settings.name}` : 'Homepage'))
     );
+    const newLead = () => openRecord(byKey.deals, null, { stage: 'New lead', owner: settings.meId || undefined, follow_up: todayISO(), source: 'Door knock' });
 
     // ---- Sales: today's follow-ups, pipeline numbers, leaderboard ----
     const deals = cache.deals || [];
@@ -533,7 +538,7 @@
     const today = todayISO();
     const due = sortRecords(byKey.deals, myOpen.filter((r) => r.payload.follow_up && String(r.payload.follow_up).slice(0, 10) <= today), { field: 'follow_up', dir: 1 });
     const monthStart = today.slice(0, 8) + '01';
-    const wonMonth = deals.filter((r) => r.payload.stage === 'Won' && String(r.payload.close_date || '').slice(0, 10) >= monthStart);
+    const wonMonth = deals.filter((r) => r.payload.stage === 'Sold' && String(r.payload.close_date || '').slice(0, 10) >= monthStart);
     const weekAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
     const weekActs = acts.filter((r) => String(r.payload.date || '').slice(0, 10) >= weekAgo);
     const sumVal = (list) => list.reduce((a, r) => a + (Number(r.payload.value) || 0), 0);
@@ -547,7 +552,7 @@
       el('div', { class: 'stats' },
         stat(money(sumVal(myOpen)), me ? 'My open pipeline' : 'Open pipeline', '#/t/deals'),
         stat(String(myOpen.length), 'Open deals', '#/t/deals'),
-        stat(money(sumVal(wonMonth)), 'Won this month', '#/t/deals'),
+        stat(money(sumVal(wonMonth)), 'Sold this month', '#/t/deals?stage=Sold'),
         stat(String(weekActs.filter((r) => !me || r.payload.rep === me).length), me ? 'My activities · 7 days' : 'Activities · 7 days', '#/t/activities')),
       el('h3', { class: 'sub-head' }, 'Follow-ups due', el('span', {}, due.length)),
       due.length ? el('div', { class: 'due-list' }, due.slice(0, 6).map((r) => {
@@ -559,7 +564,7 @@
       })) : el('p', { class: 'hint' }, deals.length ? 'Nothing due. Go open new doors.' : 'No deals yet. Add your first deal to start the pipeline.'),
       el('div', { class: 'actions-row', style: 'margin-top:12px' },
         el('button', { class: 'btn primary sm', onclick: () => openRecord(byKey.activities, null, { date: today, rep: me || undefined }) }, icon('phone'), 'Log activity'),
-        el('button', { class: 'btn sm', onclick: () => openRecord(byKey.deals, null, { stage: 'New lead', owner: me || undefined, follow_up: today }) }, icon('plus'), 'New deal'),
+        el('button', { class: 'btn sm', onclick: newLead }, icon('userPlus'), 'New lead'),
         !deals.length && hasSample() ? el('button', { class: 'btn sm', onclick: (e) => runSalesSample(e.currentTarget) }, 'Load sample deals') : null));
 
     const tallyReps = {};
@@ -573,19 +578,45 @@
         el('span', { class: 'who' }, refLabel(usersT, id)),
         el('span', { class: 'bar' }, el('i', { style: `width:${Math.max(8, Math.round(n / top * 100))}%` })),
         el('b', {}, n))))
-        : el('p', { class: 'hint' }, 'Log calls, knocks and demos to get on the board.'));
+        : el('p', { class: 'hint' }, 'Log knocks, calls and appointments to get on the board.'));
 
-    // Tally board — queue buttons with live counts
-    const tally = el('div', { class: 'tally' }, settings.queues.map((q) => {
-      const n = open.filter((r) => r.payload.queue === q).length;
-      return el('button', { class: 'tally-btn' + (n ? ' live' : ''), 'data-tilt': true, onclick: () => go('#/t/projects?queue=' + encodeURIComponent(q)), 'aria-label': `${q}: ${n} open` },
-        el('span', { class: 'tally-top' }, el('span', { class: 'led' })),
-        el('span', {}, el('span', { class: 'tally-n', 'data-n': n }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, String(q).replace(/\//g, '/\u200B'))));
-    }));
-    const queues = el('section', { class: 'card span-12 reveal' },
-      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Install pipeline'),
-        el('span', { class: 'eyebrow', style: 'margin-left:auto' }, `${open.length} open installs`)),
-      tally);
+    // ---- Illustrated quick access: the screens reps open most ----
+    const apptsToday = (cache.calendar || []).filter((r) => String(r.payload.date || '').slice(0, 10) === today).length;
+    const tile = (ic, h, label, sub, action, badge) => el(typeof action === 'string' ? 'a' : 'button',
+      Object.assign({ class: 'qtile', style: `--h:${h}`, 'data-tilt': true }, typeof action === 'string' ? { href: action } : { type: 'button', onclick: action }),
+      el('span', { class: 'qart' }, el('span', { class: 'qglow' }), icon(ic), badge ? el('span', { class: 'qbadge' }, badge) : null),
+      el('span', { class: 'qlabel' }, label), sub ? el('span', { class: 'qsub' }, sub) : null);
+    const quick = el('section', { class: 'span-12 reveal quick', 'aria-label': 'Quick access' },
+      tile('userPlus', 215, 'New lead', 'Add a homeowner', newLead),
+      tile('door', 28, 'Log a knock', 'One tap', () => openRecord(byKey.activities, null, { type: 'Door knock', date: today, rep: me || undefined })),
+      tile('bell', 350, 'Follow-ups', due.length ? `${due.length} due now` : 'All caught up', '#/t/deals?due=1', due.length || null),
+      tile('target', 255, 'Pipeline', money(sumVal(myOpen)) + ' open', '#/t/deals'),
+      tile('calendar', 190, 'Calendar', apptsToday ? `${apptsToday} appt${apptsToday === 1 ? '' : 's'} today` : 'Appointments', '#/t/calendar', apptsToday || null),
+      tile('home', 160, 'Homeowners', `${(cache.companies || []).length} on file`, '#/t/companies'),
+      tile('sun', 42, 'Installs', `${open.length} in progress`, '#/t/projects'),
+      tile('layers', 290, 'Pitch & flyers', 'PDFs', '#/t/scriptbuilders'));
+
+    // ---- Customer journey: one path from first knock to PTO ----
+    const salesSteps = STAGE_LIST.filter((x) => x !== 'Lost');
+    const step = (n, label, count, sub, href, kind) => el('a', { class: 'jstep ' + kind, href, style: `--h:${hue(label)}` },
+      el('span', { class: 'jnum' }, n), el('span', { class: 'jlabel' }, label), el('b', { class: 'jcount' }, count), sub ? el('span', { class: 'jsub' }, sub) : null);
+    const soldMonth = wonMonth.length;
+    const journey = el('section', { class: 'card span-12 reveal journey-card' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Customer journey'),
+        el('span', { class: 'eyebrow', style: 'margin-left:auto' }, 'Tap a step to open it')),
+      el('div', { class: 'journey' },
+        el('div', { class: 'jlane sales' }, el('div', { class: 'jlane-label' }, icon('target'), 'Sales'),
+          el('div', { class: 'jsteps', style: `--n:${salesSteps.length}` }, salesSteps.map((st, i) => {
+            const list = deals.filter((r) => (r.payload.stage || 'New lead') === st);
+            if (st === 'Sold') return step(i + 1, 'Sold', soldMonth, 'this month', '#/t/deals?stage=Sold', 'sold');
+            return step(i + 1, st, list.length, list.length ? money(sumVal(list)) : null, '#/t/deals?stage=' + encodeURIComponent(st), 'sale');
+          }))),
+        el('div', { class: 'jhandoff', 'aria-hidden': 'true' }, el('span', { class: 'jline' }), icon('arrowR'), el('span', {}, 'Sold deals start an install automatically'), el('span', { class: 'jline' })),
+        el('div', { class: 'jlane install' }, el('div', { class: 'jlane-label' }, icon('sun'), 'Install'),
+          el('div', { class: 'jsteps', style: `--n:${INSTALL_STEPS.length}` }, INSTALL_STEPS.map((st, i) => {
+            const n = all.filter((r) => r.payload.status === st).length;
+            return step(salesSteps.length + i + 1, st, n, st === 'PTO' ? 'live systems' : null, '#/t/projects?stage=' + encodeURIComponent(st), st === 'PTO' ? 'pto' : 'inst');
+          })))));
 
     // Directory search
     const searchBox = (key) => {
@@ -607,30 +638,8 @@
       el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Find')),
       el('div', { class: 'searches' }, searchBox('companies'), searchBox('locations'), searchBox('contacts')));
 
-    const actions = el('section', { class: 'card span-4 reveal' },
-      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Quick actions')),
-      el('div', { class: 'actions-row' },
-        el('button', { class: 'btn', onclick: () => openRecord(byKey.notepad, null) }, icon('note'), 'New note'),
-        el('button', { class: 'btn', onclick: () => openRecord(byKey.contacts, null) }, icon('contact'), 'New contact'),
-        el('button', { class: 'btn', onclick: () => openRecord(byKey.calendar, null, { date: todayISO(), assigned_to: settings.meId || undefined }) }, icon('calendar'), 'New event'),
-        el('a', { class: 'btn', href: '#/t/scriptbuilders' }, icon('layers'), 'Pitch & flyer PDFs')));
-
-    // My projects
-    const mine = me ? all.filter((r) => r.payload.assigned_to === me) : open;
-    const who = settings.name ? `${settings.name}'s installs` : 'Open installs';
-    const projCard = el('section', { class: 'card span-12 reveal grid-card', style: 'padding:0' },
-      el('div', { class: 'card-head', style: 'padding:18px 18px 4px' },
-        el('h2', { class: 'card-title' }, who),
-        el('span', { class: 'eyebrow' }, `${mine.length} ${mine.length === 1 ? 'record' : 'records'}`),
-        el('a', { class: 'btn ghost sm', href: '#/t/projects', style: 'margin-left:auto' }, 'All installs', icon('arrowR'))),
-      !me ? el('p', { class: 'hint', style: 'padding:0 18px' }, 'Showing every open install. Choose who you are in Settings to see only yours.') : null,
-      mine.length ? gridTable(projects, sortRecords(projects, mine, projects.sort), projects.columns, () => render())
-        : emptyState('folder', 'No installs here yet', me ? 'Installs assigned to you will show up here.' : 'Sold deals become installs. Add your first one here.',
-          el('div', { class: 'actions-row', style: 'justify-content:center' },
-            el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined, status: 'Site survey' }) }, icon('plus'), 'New install'),
-            !all.length && !hasSample() ? el('button', { class: 'btn', onclick: (e) => runSample(e.currentTarget, true) }, 'Load sample data') : null)));
-
-    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), todayCard, board, queues, searches, actions, projCard);
+    searches.classList.replace('span-8', 'span-12');
+    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), quick, journey, todayCard, board, searches);
   }
 
   // ---------------------------------------------------------------------
@@ -702,7 +711,7 @@
 
     if (spec.view === 'notes') return el('div', {}, head, renderNotes(spec, recs));
     if (st.mode === 'calendar' && dateField) return el('div', {}, head, renderCalendar(spec, recs, dateField, st));
-    if (st.mode === 'board' && spec.boardField) return el('div', {}, head, renderBoard(spec, recs, spec.boardField, st));
+    if (st.mode === 'board' && spec.boardField) return el('div', {}, head, renderBoard(spec, recs, spec.boardField, st, params));
 
     // List view
     const body = el('div', { class: 'card grid-card reveal' });
@@ -747,87 +756,130 @@
   }
 
   // Pipeline board (Salesforce-style kanban). Drag cards on desktop; tap the arrow to advance on a phone.
-  function renderBoard(spec, recs, field, st) {
+  // Works for Deals (sales stages) and Installs (install steps).
+  function renderBoard(spec, recs, field, st, params = {}) {
+    const c = spec.card || {};
     const stages = typeOf(spec, field).options;
+    const terminal = new Set(['Lost', 'Paused']);
     const mineOnly = st.mine && settings.meId;
+    const dueOnly = params.due === '1';
     const wrap = el('div', { class: 'board reveal' });
-    const search = el('input', { class: 'input', type: 'search', placeholder: 'Search deals', value: st.q || '', 'aria-label': 'Search deals' });
+    const word = spec.label.toLowerCase();
+    const search = el('input', { class: 'input', type: 'search', placeholder: `Search ${word}`, value: st.q || '', 'aria-label': `Search ${word}` });
     search.addEventListener('input', () => { st.q = search.value; fill(); });
     const toolbar = el('div', { class: 'toolbar' },
       el('div', { class: 'search' }, icon('search'), search),
-      settings.meId ? el('div', { class: 'chips' },
+      dueOnly ? el('a', { class: 'chip', 'aria-pressed': 'true', href: '#/t/' + spec.key, title: 'Show all' }, 'Due today or overdue  ×') : null,
+      settings.meId && c.owner ? el('div', { class: 'chips' },
         el('button', { class: 'chip', 'aria-pressed': String(!mineOnly), onclick: () => { st.mine = false; render(); } }, 'Everyone'),
-        el('button', { class: 'chip', 'aria-pressed': String(!!mineOnly), onclick: () => { st.mine = true; render(); } }, 'My deals')) : null);
+        el('button', { class: 'chip', 'aria-pressed': String(!!mineOnly), onclick: () => { st.mine = true; render(); } }, 'Mine')) : null);
 
+    const inStage = (r, stage) => (r.payload[field] || stages[0]) === stage;
+    function visible() {
+      const q = (st.q || '').trim().toLowerCase();
+      let rows = recs;
+      if (mineOnly && c.owner) rows = rows.filter((r) => r.payload[c.owner] === settings.meId);
+      if (dueOnly && c.due) rows = rows.filter((r) => r.payload[c.due] && String(r.payload[c.due]).slice(0, 10) <= todayISO() && !DONE.has(r.payload[field]));
+      if (q) rows = rows.filter((r) => searchText(spec, r).includes(q));
+      return rows;
+    }
     function fill() {
-    const q = (st.q || '').trim().toLowerCase();
-    let rows = recs;
-    if (mineOnly) rows = rows.filter((r) => r.payload.owner === settings.meId);
-    if (q) rows = rows.filter((r) => searchText(spec, r).includes(q));
-    wrap.replaceChildren();
-    stages.forEach((stage, idx) => {
-      const items = sortRecords(spec, rows.filter((r) => (r.payload[field] || stages[0]) === stage), { field: 'follow_up', dir: 1 });
-      const total = items.reduce((a, r) => a + (Number(r.payload.value) || 0), 0);
-      const next = stages[idx + 1] && !DONE.has(stage) && !DONE.has(stages[idx + 1]) ? stages[idx + 1] : (stage === 'Negotiation' ? 'Won' : null);
-      const list = el('div', { class: 'kcol-list' }, items.length ? items.map((r) => {
-        const fu = r.payload.follow_up;
-        const late = fu && fu.slice(0, 10) < todayISO() && !DONE.has(stage);
-        const today = fu && fu.slice(0, 10) === todayISO();
-        const t = typeOf(spec, 'company');
-        return el('article', { class: 'kcard', draggable: 'true', tabIndex: 0, 'data-tilt': true,
-            ondragstart: (e) => { e.dataTransfer.setData('text/plain', r.id); e.currentTarget.classList.add('dragging'); },
-            ondragend: (e) => e.currentTarget.classList.remove('dragging'),
-            onclick: () => openRecord(spec, r), onkeydown: (e) => { if (e.key === 'Enter') openRecord(spec, r); } },
-          el('div', { class: 'kcard-top' }, el('strong', {}, titleOf(spec, r)), r.payload.value ? el('span', { class: 'kval' }, money(r.payload.value)) : null),
-          r.payload.company ? el('div', { class: 'kmeta' }, refLabel(t.target, r.payload.company)) : null,
-          r.payload.next_step ? el('div', { class: 'kstep' }, r.payload.next_step) : null,
-          el('div', { class: 'kfoot' },
-            fu ? el('span', { class: 'kdue' + (late ? ' late' : today ? ' today' : '') }, late ? 'Overdue · ' + fmtDate(fu) : today ? 'Follow up today' : 'Follow up ' + fmtDate(fu)) : el('span', { class: 'kdue none' }, 'No follow-up'),
-            r.payload.owner ? el('span', { class: 'kowner', title: refLabel(typeOf(spec, 'owner').target, r.payload.owner) }, initials(refLabel(typeOf(spec, 'owner').target, r.payload.owner))) : null,
-            next ? el('button', { class: 'knext', type: 'button', title: `Move to ${next}`, 'aria-label': `Move to ${next}`,
-              onclick: (e) => { e.stopPropagation(); moveStage(spec, r, field, next); } }, icon('arrowR')) : null));
-      }) : el('div', { class: 'kempty' }, 'Drop deals here'));
-      const col = el('section', { class: 'kcol', 'data-stage': stage, style: `--h:${hue(stage)}`,
-          ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('over'); },
-          ondragleave: (e) => e.currentTarget.classList.remove('over'),
-          ondrop: (e) => {
-            e.preventDefault(); e.currentTarget.classList.remove('over');
-            const rec = recs.find((x) => x.id === e.dataTransfer.getData('text/plain'));
-            if (rec && (rec.payload[field] || stages[0]) !== stage) moveStage(spec, rec, field, stage);
-          } },
-        el('header', { class: 'kcol-head' },
-          el('span', { class: 'kdot' }), el('h3', {}, stage), el('span', { class: 'kcount' }, items.length),
-          el('span', { class: 'ktotal' }, money(total))),
-        list,
-        !DONE.has(stage) ? el('button', { class: 'kadd', type: 'button', onclick: () => openRecord(spec, null, { [field]: stage, owner: settings.meId || undefined }) }, icon('plus'), 'Add deal') : null);
-      wrap.append(col);
-    });
+      const rows = visible();
+      wrap.replaceChildren();
+      stages.forEach((stage, idx) => {
+        const items = sortRecords(spec, rows.filter((r) => inStage(r, stage)), c.due ? { field: c.due, dir: 1 } : null);
+        const total = c.value ? items.reduce((a, r) => a + (Number(r.payload[c.value]) || 0), 0) : null;
+        const nx = stages[idx + 1];
+        const next = !DONE.has(stage) && !terminal.has(stage) && nx && !terminal.has(nx) ? nx : null;
+        const list = el('div', { class: 'kcol-list' }, items.length ? items.map((r) => {
+          const fu = c.due && r.payload[c.due];
+          const late = fu && fu.slice(0, 10) < todayISO() && !DONE.has(stage);
+          const today = fu && fu.slice(0, 10) === todayISO();
+          const ownerName = c.owner && r.payload[c.owner] ? refLabel(typeOf(spec, c.owner).target, r.payload[c.owner]) : null;
+          return el('article', { class: 'kcard', draggable: 'true', tabIndex: 0, 'data-tilt': true,
+              ondragstart: (e) => { e.dataTransfer.setData('text/plain', r.id); e.currentTarget.classList.add('dragging'); },
+              ondragend: (e) => e.currentTarget.classList.remove('dragging'),
+              onclick: () => openRecord(spec, r), onkeydown: (e) => { if (e.key === 'Enter') openRecord(spec, r); } },
+            el('div', { class: 'kcard-top' }, el('strong', {}, titleOf(spec, r)), c.value && r.payload[c.value] ? el('span', { class: 'kval' }, money(r.payload[c.value])) : null),
+            c.sub && r.payload[c.sub] ? el('div', { class: 'kmeta' }, refLabel(typeOf(spec, c.sub).target, r.payload[c.sub])) : null,
+            c.note && r.payload[c.note] ? el('div', { class: 'kstep' }, r.payload[c.note]) : null,
+            el('div', { class: 'kfoot' },
+              DONE.has(stage) ? el('span', { class: 'kdue done' }, stage === 'Lost' ? 'Closed' : 'Done') :
+                fu ? el('span', { class: 'kdue' + (late ? ' late' : today ? ' today' : '') }, late ? 'Overdue · ' + fmtDate(fu) : today ? `${c.dueWord} today` : `${c.dueWord} ${fmtDate(fu)}`) : el('span', { class: 'kdue none' }, `No ${c.dueWord.toLowerCase()} date`),
+              ownerName ? el('span', { class: 'kowner', title: ownerName }, initials(ownerName)) : null,
+              next ? el('button', { class: 'knext', type: 'button', title: `Move to ${next}`, 'aria-label': `Move to ${next}`,
+                onclick: (e) => { e.stopPropagation(); moveStage(spec, r, field, next); } }, icon('arrowR')) : null));
+        }) : el('div', { class: 'kempty' }, `Nothing in ${stage}`));
+        const col = el('section', { class: 'kcol' + (terminal.has(stage) ? ' muted' : ''), 'data-stage': stage, style: `--h:${hue(stage)}`,
+            ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('over'); },
+            ondragleave: (e) => e.currentTarget.classList.remove('over'),
+            ondrop: (e) => {
+              e.preventDefault(); e.currentTarget.classList.remove('over');
+              const rec = recs.find((x) => x.id === e.dataTransfer.getData('text/plain'));
+              if (rec && !inStage(rec, stage)) moveStage(spec, rec, field, stage);
+            } },
+          el('header', { class: 'kcol-head' },
+            el('span', { class: 'kstepno' }, terminal.has(stage) ? '–' : String(idx + 1 + (c.stepOffset || 0))), el('h3', {}, stage), el('span', { class: 'kcount' }, items.length),
+            total !== null ? el('span', { class: 'ktotal' }, money(total)) : null),
+          list,
+          idx === 0 ? el('button', { class: 'kadd', type: 'button', onclick: () => openRecord(spec, null, Object.assign({ [field]: stage }, c.owner && settings.meId ? { [c.owner]: settings.meId } : {}, c.due === 'follow_up' ? { follow_up: todayISO() } : {})) }, icon('plus'), `Add ${spec.single}`) : null);
+        wrap.append(col);
+      });
     }
     fill();
-    const jump = el('div', { class: 'board-jump', role: 'group', 'aria-label': 'Jump to stage' }, stages.map((stage) => {
-      const n = recs.filter((r) => (r.payload[field] || stages[0]) === stage && (!mineOnly || r.payload.owner === settings.meId)).length;
-      return el('button', { class: 'chip', type: 'button', style: `--h:${hue(stage)}`, onclick: () => {
-        const col = wrap.querySelector(`.kcol[data-stage="${CSS.escape(stage)}"]`);
-        if (col) wrap.scrollTo({ left: col.offsetLeft - wrap.offsetLeft - 16, behavior: reduceMotion() ? 'auto' : 'smooth' });
-      } }, el('span', { class: 'kdot' }), stage, el('span', { class: 'n' }, n));
+    const jumpTo = (stage, smooth) => {
+      const col = wrap.querySelector(`.kcol[data-stage="${CSS.escape(stage)}"]`);
+      if (col) wrap.scrollTo({ left: col.offsetLeft - wrap.offsetLeft - 16, behavior: smooth && !reduceMotion() ? 'smooth' : 'auto' });
+    };
+    const jump = el('div', { class: 'board-jump', role: 'group', 'aria-label': 'Jump to stage' }, stages.map((stage, i) => {
+      const n = visible().filter((r) => inStage(r, stage)).length;
+      return el('button', { class: 'chip', type: 'button', style: `--h:${hue(stage)}`, onclick: () => jumpTo(stage, true) },
+        el('span', { class: 'kdot' }), stage, el('span', { class: 'n' }, n));
     }));
+    if (params.stage) requestAnimationFrame(() => requestAnimationFrame(() => jumpTo(params.stage, false)));
     return el('div', {}, toolbar, jump, wrap);
   }
   const initials = (name) => String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
 
   async function moveStage(spec, rec, field, stage) {
     const patch = { [field]: stage };
-    if (stage === 'Won' || stage === 'Lost') { if (!rec.payload.close_date) patch.close_date = todayISO(); }
+    if ((stage === 'Sold' || stage === 'Lost') && 'close_date' in schemaOf(spec) && !rec.payload.close_date) patch.close_date = todayISO();
     try {
       await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
       delete cache[spec.key];
-      toast(stage === 'Won' ? `Closed won: ${titleOf(spec, rec)}` : `Moved to ${stage}`);
+      let msg = `Moved to ${stage}`;
+      if (spec.key === 'deals' && stage === 'Sold') {
+        const made = await ensureInstall(Object.assign({}, rec, { payload: Object.assign({}, rec.payload, patch) }));
+        msg = `Sold: ${titleOf(spec, rec)}` + (made ? ' · install started at Site survey' : '');
+      }
+      if (spec.key === 'projects' && stage === 'PTO') msg = `PTO: ${titleOf(spec, rec)} is live`;
+      toast(msg);
       await render();
+      refreshCounts();
     } catch (e) { toast(e.message, true); }
   }
 
+  // Sold deal → install record at Site survey (once per deal)
+  async function ensureInstall(deal) {
+    const P = byKey.projects;
+    if (!P || !('deal' in schemaOf(P))) return false;
+    const installs = await load(P, true);
+    if (installs.some((r) => r.payload.deal === deal.id)) return false;
+    const d = deal.payload;
+    const due = (() => { const x = new Date(); x.setDate(x.getDate() + 7); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; })();
+    const name = String(d.deal_name || 'New customer').split(' — ')[0];
+    await api('POST', '/api/vault/insert-record', { registry_id: P.reg.id, payload: Object.assign(
+      { project_title: `${name} — install`, status: 'Site survey', deal: deal.id, project_type: d.battery ? 'Solar + battery' : 'Solar', date_due: due },
+      settings.queues[0] ? { queue: settings.queues[0] } : {}, d.company ? { company: d.company } : {}) });
+    if (d.company && byKey.companies) {
+      try { await api('POST', '/api/vault/update-record', { registry_id: byKey.companies.reg.id, record_id: d.company, payload: { status: 'Customer' } }); delete cache.companies; } catch (_) {}
+    }
+    delete cache.projects;
+    return true;
+  }
+
   // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
-  const OUTCOME_STAGE = { 'Appointment set': 'Appointment set', 'Proposal sent': 'Proposal sent', Sold: 'Won', 'Not interested': 'Lost' };
+  const OUTCOME_STAGE = { 'Appointment set': 'Appointment set', 'Proposal sent': 'Proposal sent', Sold: 'Sold', 'Not interested': 'Lost' };
   function quickLog(spec, rec) {
     const type = el('select', { class: 'select', 'aria-label': 'Activity type' }, ACT_TYPES.map((t) => el('option', { value: t }, t)));
     const fu = el('input', { class: 'input', type: 'date', 'aria-label': 'Next follow-up', value: rec.payload.follow_up ? String(rec.payload.follow_up).slice(0, 10) : '' });
@@ -844,16 +896,17 @@
           settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}, note.value.trim() ? { notes: note.value.trim() } : {}) });
         const cur = STAGE_LIST.indexOf(p.stage || STAGE_LIST[0]);
         let to = OUTCOME_STAGE[outcome];
-        if (!to && cur === 0 && !['No answer', 'Left voicemail', 'Not home'].includes(outcome)) to = 'Contacted';
-        if (to && to !== 'Lost' && to !== 'Won' && STAGE_LIST.indexOf(to) <= cur) to = null;
+        if (!to && cur === 0) to = 'Follow-up';
+        if (to && to !== 'Lost' && to !== 'Sold' && STAGE_LIST.indexOf(to) <= cur) to = null;
         if (DONE.has(p.stage)) to = null;
         const patch = {};
         if (to) patch.stage = to;
-        if (to === 'Won' || to === 'Lost') patch.close_date = todayISO();
+        if (to === 'Sold' || to === 'Lost') patch.close_date = todayISO();
         if (fu.value && fu.value !== String(p.follow_up || '').slice(0, 10)) patch.follow_up = fu.value;
         if (Object.keys(patch).length) await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
         delete cache.activities; delete cache[spec.key];
-        toast(`Logged ${outcome}` + (to ? ` · moved to ${to}` : ''));
+        const made = to === 'Sold' ? await ensureInstall(Object.assign({}, rec, { payload: Object.assign({}, p, patch) })) : false;
+        toast(`Logged ${outcome}` + (to ? ` · moved to ${to}` : '') + (made ? ' · install started' : ''));
         closeDrawer();
         await render();
         refreshCounts();
@@ -1093,6 +1146,7 @@
       ['companies', 'c3', { company_name: 'Carter Household', status: 'Lead', phone: '916-555-0160', utility: 'Roseville Electric', avg_monthly_bill: 260, roof_type: 'Composition shingle', roof_age: 4, shade: 'None', notes: 'Sample homeowner from a flyer scan.' }],
       ['companies', 'c4', { company_name: 'Lopez Household', status: 'Lead', phone: '916-555-0170', utility: 'PG&E', avg_monthly_bill: 285, roof_type: 'Composition shingle', roof_age: 15, shade: 'Some', notes: 'Sample homeowner. Roof may need a check before install.' }],
       ['companies', 'c5', { company_name: 'Patel Household', status: 'Customer', phone: '916-555-0180', utility: 'PG&E', avg_monthly_bill: 240, roof_type: 'Composition shingle', roof_age: 6, shade: 'None', notes: 'Sample customer. Signed this month.' }],
+      ['companies', 'c7', { company_name: 'Okafor Household', status: 'Lead', phone: '916-555-0195', utility: 'PG&E', avg_monthly_bill: 350, roof_type: 'Tile', roof_age: 10, shade: 'Some', notes: 'Sample homeowner. Comparing lease and PPA.' }],
       ['companies', 'c6', { company_name: 'Kim Household', status: 'Customer', phone: '916-555-0190', utility: 'SMUD', avg_monthly_bill: 220, roof_type: 'Metal', roof_age: 3, shade: 'None', notes: 'Sample customer. System on and producing.' }],
 
       ['locations', 'l1', { location_name: 'Martinez home', company: '@c1', address: '100 Sample St', city: 'Roseville', state: 'CA', zip: '95661' }],
@@ -1115,9 +1169,10 @@
       ['deals', 'd1', { deal_name: 'Martinez — 7.2 kW', stage: 'Appointment set', value: 24000, system_size_kw: 7.2, financing: 'PPA', battery: false, company: '@c1', contact: '@p1', owner: '@u1', source: 'Door knock', follow_up: day(0), next_step: 'Kitchen-table appointment 6:30pm, both spouses home' }],
       ['deals', 'd2', { deal_name: 'Nguyen — 9.6 kW + battery', stage: 'Proposal sent', value: 38000, system_size_kw: 9.6, financing: 'PPA', battery: true, company: '@c2', contact: '@p3', owner: '@u1', source: 'Referral', follow_up: day(-1), next_step: 'Answer battery questions, check HOA approval' }],
       ['deals', 'd3', { deal_name: 'Carter — 6.0 kW', stage: 'New lead', value: 20000, system_size_kw: 6, financing: 'PPA', company: '@c3', contact: '@p4', owner: '@u2', source: 'Flyer', follow_up: day(1), next_step: 'First call, ask for a recent bill' }],
-      ['deals', 'd4', { deal_name: 'Lopez — 6.8 kW', stage: 'Contacted', value: 22000, system_size_kw: 6.8, financing: 'Loan', company: '@c4', contact: '@p5', owner: '@u2', source: 'Door knock', follow_up: day(-3), next_step: 'Come back after 6pm when both are home' }],
-      ['deals', 'd5', { deal_name: 'Okafor — 8.4 kW', stage: 'Negotiation', value: 29000, system_size_kw: 8.4, financing: 'Lease', owner: '@u1', source: 'Website', follow_up: day(2), next_step: 'Compare lease vs PPA side by side' }],
-      ['deals', 'd6', { deal_name: 'Patel — 6.4 kW', stage: 'Won', value: 22000, system_size_kw: 6.4, financing: 'PPA', company: '@c5', contact: '@p6', owner: '@u1', source: 'Referral', close_date: day(0) }],
+      ['deals', 'd4', { deal_name: 'Lopez — 6.8 kW', stage: 'Follow-up', value: 22000, system_size_kw: 6.8, financing: 'Loan', company: '@c4', contact: '@p5', owner: '@u2', source: 'Door knock', follow_up: day(-3), next_step: 'Come back after 6pm when both are home' }],
+      ['deals', 'd5', { deal_name: 'Okafor — 8.4 kW', company: '@c7', stage: 'Proposal sent', value: 29000, system_size_kw: 8.4, financing: 'Lease', owner: '@u1', source: 'Website', follow_up: day(2), next_step: 'Compare lease vs PPA side by side' }],
+      ['deals', 'd6', { deal_name: 'Patel — 6.4 kW', stage: 'Sold', value: 22000, system_size_kw: 6.4, financing: 'PPA', company: '@c5', contact: '@p6', owner: '@u1', source: 'Referral', close_date: day(0) }],
+      ['deals', 'd8', { deal_name: 'Kim — 5.2 kW', stage: 'Sold', value: 18000, system_size_kw: 5.2, financing: 'PPA', company: '@c6', owner: '@u2', source: 'Door knock', close_date: day(-45) }],
       ['deals', 'd7', { deal_name: 'Brooks — 5.6 kW', stage: 'Lost', value: 19000, system_size_kw: 5.6, financing: 'Cash', owner: '@u2', source: 'Door knock', close_date: day(-10), notes: 'Roof too shaded.' }],
 
       ['activities', 'a1', { subject: 'Door knock — Appointment set', type: 'Door knock', outcome: 'Appointment set', deal: '@d1', company: '@c1', contact: '@p1', rep: '@u2', date: day(-2) }],
@@ -1127,15 +1182,14 @@
       ['activities', 'a5', { subject: 'Appointment — Sold', type: 'Appointment', outcome: 'Sold', deal: '@d6', company: '@c5', contact: '@p6', rep: '@u1', date: day(0) }],
       ['activities', 'a6', { subject: 'Follow-up visit — Callback set', type: 'Follow-up visit', outcome: 'Callback set', deal: '@d5', rep: '@u1', date: day(-1) }],
 
-      ['projects', 'j1', { project_title: 'Patel — site survey', status: 'Site survey', queue: Q(0), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(3) }],
-      ['projects', 'j2', { project_title: 'Kim — final inspection', status: 'Inspection', queue: Q(2), assigned_to: '@u3', company: '@c6', project_type: 'Solar', date_due: day(-1) }],
-      ['projects', 'j3', { project_title: 'Kim — utility PTO', status: 'PTO', queue: Q(3), assigned_to: '@u3', company: '@c6', project_type: 'Solar', date_due: day(-12) }],
-      ['projects', 'j4', { project_title: 'Patel — system design', status: 'Design', queue: Q(1), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(7), url: 'https://example.com/designs/patel', url_details: 'Design draft' }],
-      ['projects', 'j5', { project_title: 'Patel — city permit', status: 'Permit', queue: Q(1), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(14), project_attachment: 'https://example.com/permits/patel' }],
-      ['projects', 'j6', { project_title: 'Kim — welcome call', status: 'Install', queue: Q(4), assigned_to: '@u1', company: '@c6', project_type: 'Solar', date_due: day(2) }],
+      ['projects', 'j1', { project_title: 'Patel — install', status: 'Site survey', queue: Q(0), assigned_to: '@u3', company: '@c5', deal: '@d6', project_type: 'Solar', date_due: day(3), url_details: 'Survey booked Thursday 10am' }],
+      ['projects', 'j2', { project_title: 'Kim — install', status: 'Inspection', queue: Q(3), assigned_to: '@u3', company: '@c6', deal: '@d8', project_type: 'Solar', date_due: day(-1), url_details: 'Waiting on city inspector' }],
+      ['projects', 'j3', { project_title: 'Alvarez — install', status: 'PTO', queue: Q(3), assigned_to: '@u3', project_type: 'Solar + battery', date_due: day(-12), url_details: 'Permission to operate granted' }],
+      ['projects', 'j4', { project_title: 'Brennan — install', status: 'Design', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(5), url: 'https://example.com/designs/brennan', url_details: 'Design draft ready for review' }],
+      ['projects', 'j5', { project_title: 'Whitaker — install', status: 'Permit', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(10), url_details: 'Submitted to the city' }],
+      ['projects', 'j6', { project_title: 'Castillo — install', status: 'Install', queue: Q(2), assigned_to: '@u3', project_type: 'Solar + battery', date_due: day(2), url_details: 'Crew scheduled' }],
 
-      ['indi_projects', 'i1', { project_title: 'Update door-knock talk track', status: 'Design', assigned_to: '@u2', date_due: day(6) }],
-      ['indi_projects', 'i2', { project_title: 'Plan Rocklin flyer route', status: 'Site survey', assigned_to: '@u2', date_due: day(9) }],
+
 
       ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Sent the last 12 months of PG&E bills for the proposal.' }],
       ['scripts_mail', 'm2', { subject: 'Battery question — Nguyen', status: 'New', company: '@c2', contact: '@p3', received: day(-1), script: 'Wants to know how a battery works during an outage.' }],
@@ -1191,6 +1245,7 @@
     const prev = settings.sampleIds || {};
     for (const [k, v] of Object.entries(made)) prev[k] = (prev[k] || []).concat(v);
     settings.sampleIds = prev;
+    if (!only) settings.sampleVersion = SAMPLE_VERSION;
     saveSettings();
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
@@ -1210,6 +1265,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
+  const SAMPLE_VERSION = 3;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -1503,6 +1559,10 @@
       pill.className = 'mode-pill on';
       pill.title = LOCAL ? 'Data is saved in this browser on this device' : 'Connected to the server';
       await bootstrap();
+      if (hasSample() && settings.sampleVersion !== SAMPLE_VERSION) {
+        // Older sample records (message-on-hold era) → current solar homeowners. Records you added stay.
+        try { await removeSampleData(); await loadSampleData(); toast('Sample data updated to solar homeowners'); } catch (e) { console.warn('Sample refresh failed', e.message); }
+      }
       await render();
       if (!settings.welcomed) openSettings(true);
     } catch (e) {

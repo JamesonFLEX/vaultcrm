@@ -44,7 +44,7 @@ Dockerfile            App image
 
 ## The workspace
 
-Tabs: **Home, Users, Companies, Locations, Contacts, Projects, Indi projects, Scripts mail, Calendar, Scriptbuilders & blasts, Sales events, Vendors, Notepad, Scripts sent mail, New table.** They're created automatically on first launch, already linked to each other (a contact belongs to a company, a project is assigned to a user, and so on).
+Tabs: **Home** (illustrated quick access + customer journey), **Sales pipeline** (New lead → Follow-up → Appointment set → Proposal sent → Sold / Lost), **Activities** (one-tap door-knock and call outcomes), **Homeowners**, **Properties**, **Contacts**, **Installs** (Site survey → Design → Permit → Install → Inspection → PTO; a Sold deal starts its install automatically), **Calendar**, **Canvass events**, **Partners**, **Notepad**, plus custom tables.
 
 - **Home:** queue tally board with live open-project counts, company/location/contact search, quick actions, and your assigned projects
 - **Any record:** opens a side panel to edit it, plus every linked record (for example, a company's contacts and projects)
