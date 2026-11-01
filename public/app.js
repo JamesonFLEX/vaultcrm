@@ -64,7 +64,12 @@
     list: 'M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01',
     download: 'M12 3v12M7 10l5 5 5-5M4 21h16',
     upload: 'M12 15V3M7 8l5-5 5 5M4 21h16',
-    arrowR: 'M5 12h14M13 6l6 6-6 6'
+    arrowR: 'M5 12h14M13 6l6 6-6 6',
+    target: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18M12 16a4 4 0 1 0 0-8 4 4 0 0 0 0 8M12 12h.01',
+    phone: 'M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1.9.4 1.8.7 2.7a2 2 0 0 1-.5 2.1L8 9.8a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.7.7a2 2 0 0 1 1.7 2z',
+    board: 'M4 4h4v16H4zM10 4h4v10h-4zM16 4h4v13h-4z',
+    trophy: 'M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM7 6H4a3 3 0 0 0 3 4M17 6h3a3 3 0 0 1-3 4',
+    check: 'M5 12.5l4.5 4.5L19 7.5'
   };
   function icon(name, cls = 'i') {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -139,6 +144,10 @@
   // ---------------------------------------------------------------------
   const APP = 'Workspace';
   const STATUS = 'CHOICE:Intake|Scripting|Production|Review|Delivered|On hold';
+  const STAGE_LIST = ['New lead', 'Contacted', 'Demo set', 'Proposal sent', 'Negotiation', 'Won', 'Lost'];
+  const STAGES = 'CHOICE:' + STAGE_LIST.join('|');
+  const OUTCOMES = ['No answer', 'Left voicemail', 'Gatekeeper', 'Callback set', 'Demo set', 'Proposal sent', 'Sold', 'Not interested'];
+  const ACT_TYPES = ['Call', 'Door knock', 'Email', 'Text', 'Meeting', 'Demo'];
   const f = (n, t, extra) => Object.assign({ n, t }, extra);
   const full = (...parts) => parts.filter(Boolean).join(' ').trim();
 
@@ -159,6 +168,15 @@
     { key: 'vendors', table: 'Vendors', label: 'Vendors', single: 'vendor', icon: 'truck', group: 'Directory',
       fields: [f('vendor_name', 'TEXT'), f('service', 'TEXT'), f('contact_name', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('website', 'URL'), f('notes', 'LONGTEXT')],
       title: (p) => p.vendor_name, columns: ['vendor_name', 'service', 'contact_name', 'email', 'phone'] },
+    { key: 'deals', table: 'Deals', label: 'Deals', single: 'deal', icon: 'target', group: 'Sales', view: 'board', boardField: 'stage',
+      fields: [f('deal_name', 'TEXT'), f('stage', STAGES), f('value', 'NUMBER', { label: 'Value ($)' }), f('company', 'REF:@companies'), f('contact', 'REF:@contacts'),
+        f('owner', 'REF:@users'), f('source', 'CHOICE:Door knock|Cold call|Referral|Website|Event|Flyer|Existing customer|Other'),
+        f('follow_up', 'DATE'), f('next_step', 'TEXT'), f('close_date', 'DATE'), f('notes', 'LONGTEXT')],
+      title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'value', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
+    { key: 'activities', table: 'Activities', label: 'Activities', single: 'activity', icon: 'phone', group: 'Sales',
+      fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
+        f('company', 'REF:@companies'), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
+      title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date'], sort: { field: 'date', dir: -1 } },
     { key: 'projects', table: 'Projects', label: 'Projects', single: 'project', icon: 'folder', group: 'Production',
       fields: [f('project_title', 'TEXT'), f('status', STATUS), f('queue', 'TEXT', { ui: 'queue' }), f('assigned_to', 'REF:@users'),
         f('company', 'REF:@companies'), f('project_type', 'CHOICE:Implementation|Production only|Script update|Any'), f('date_due', 'DATE'),
@@ -188,8 +206,8 @@
       fields: [f('title', 'TEXT'), f('body', 'LONGTEXT'), f('pinned', 'BOOLEAN')],
       title: (p) => p.title, columns: ['title', 'body', 'pinned'] }
   ];
-  const GROUPS = ['Directory', 'Production', 'Schedule', 'Notes', 'Custom'];
-  const BOTTOM = ['home', 'projects', 'contacts', 'calendar'];
+  const GROUPS = ['Sales', 'Directory', 'Production', 'Schedule', 'Notes', 'Custom'];
+  const BOTTOM = ['home', 'deals', 'projects', 'calendar'];
 
   let specs = [];             // SPEC entries + custom tables, each with .reg
   const byKey = {};
@@ -280,7 +298,7 @@
   // Value display
   // ---------------------------------------------------------------------
   const HUES = { delivered: 150, done: 150, active: 150, 'in progress': 210, production: 36, scripting: 265, review: 190, intake: 220,
-    lead: 285, new: 210, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
+    lead: 285, new: 210, 'new lead': 220, contacted: 200, 'demo set': 265, 'proposal sent': 36, negotiation: 320, won: 150, lost: 0, sold: 150, 'not interested': 0, 'no answer': 30, 'left voicemail': 30, gatekeeper: 45, 'callback set': 190, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
   function hue(s) {
     const k = String(s).toLowerCase();
     if (k in HUES) return HUES[k];
@@ -301,7 +319,8 @@
     if (y !== new Date().getFullYear()) opts.year = 'numeric';
     return dt.toLocaleDateString(undefined, opts);
   }
-  const DONE = new Set(['Delivered', 'Done', 'Cancelled']);
+  const DONE = new Set(['Delivered', 'Done', 'Cancelled', 'Won', 'Lost']);
+  const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 
   function display(spec, field, rec) {
     const v = rec.payload[field];
@@ -311,7 +330,7 @@
       case 'CHOICE': return pill(v);
       case 'REF': return el('span', { class: 'cell-ref' }, refLabel(t.target, v));
       case 'DATE': {
-        const overdue = /due/.test(field) && v.slice(0, 10) < todayISO() && !DONE.has(rec.payload.status);
+        const overdue = /due|follow/.test(field) && v.slice(0, 10) < todayISO() && !DONE.has(rec.payload.status || rec.payload.stage);
         return el('span', { class: 'cell-mono' + (overdue ? ' overdue' : ''), title: overdue ? 'Past due' : null }, fmtDate(v));
       }
       case 'URL': {
@@ -322,7 +341,7 @@
       case 'EMAIL': return el('a', { href: 'mailto:' + v, onclick: (e) => e.stopPropagation() }, v);
       case 'PHONE': return el('a', { class: 'cell-mono', href: 'tel:' + v.replace(/[^\d+]/g, ''), onclick: (e) => e.stopPropagation() }, v);
       case 'BOOLEAN': return v ? pill('Yes') : null;
-      case 'NUMBER': return el('span', { class: 'cell-mono' }, Number(v).toLocaleString());
+      case 'NUMBER': return el('span', { class: 'cell-mono' }, field === 'value' ? money(v) : Number(v).toLocaleString());
       case 'LONGTEXT': return el('span', { class: 'cell-clip' }, v);
       default: return el('span', {}, v);
     }
@@ -448,7 +467,7 @@
   async function renderHome() {
     setCrumbs(settings.workspace || 'Workspace', 'Home');
     const projects = byKey.projects;
-    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts)]);
+    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts), load(byKey.deals), load(byKey.activities)]);
     const all = cache.projects;
     const open = all.filter((r) => !DONE.has(r.payload.status));
 
@@ -459,8 +478,60 @@
         el('div', { class: 'eyebrow' }, now.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })),
         el('h1', { class: 'page-title' }, settings.name ? `${settings.name}'s homepage` : 'Homepage')),
       el('div', { class: 'page-actions' },
-        el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: settings.meId || undefined }) }, icon('plus'), 'New project'))
+        el('button', { class: 'btn primary', onclick: () => openRecord(byKey.deals, null, { stage: 'New lead', owner: settings.meId || undefined, follow_up: todayISO() }) }, icon('plus'), 'New deal'),
+        el('button', { class: 'btn', onclick: () => openRecord(projects, null, { assigned_to: settings.meId || undefined }) }, icon('plus'), 'New project'))
     );
+
+    // ---- Sales: today's follow-ups, pipeline numbers, leaderboard ----
+    const deals = cache.deals || [];
+    const acts = cache.activities || [];
+    const me = settings.meId;
+    const openDeals = deals.filter((r) => !DONE.has(r.payload.stage));
+    const myOpen = me ? openDeals.filter((r) => r.payload.owner === me) : openDeals;
+    const today = todayISO();
+    const due = sortRecords(byKey.deals, myOpen.filter((r) => r.payload.follow_up && String(r.payload.follow_up).slice(0, 10) <= today), { field: 'follow_up', dir: 1 });
+    const monthStart = today.slice(0, 8) + '01';
+    const wonMonth = deals.filter((r) => r.payload.stage === 'Won' && String(r.payload.close_date || '').slice(0, 10) >= monthStart);
+    const weekAgo = (() => { const d = new Date(); d.setDate(d.getDate() - 6); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; })();
+    const weekActs = acts.filter((r) => String(r.payload.date || '').slice(0, 10) >= weekAgo);
+    const sumVal = (list) => list.reduce((a, r) => a + (Number(r.payload.value) || 0), 0);
+    const stat = (n, label, href) => el('a', { class: 'stat', href }, el('b', {}, n), el('span', {}, label));
+    const usersT = typeOf(byKey.deals, 'owner').target;
+    const compT = typeOf(byKey.deals, 'company').target;
+
+    const todayCard = el('section', { class: 'card span-8 reveal sales-card' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, me && settings.name ? `${settings.name}'s day` : 'Today'),
+        el('a', { class: 'btn ghost sm', href: '#/t/deals', style: 'margin-left:auto' }, 'Pipeline', icon('arrowR'))),
+      el('div', { class: 'stats' },
+        stat(money(sumVal(myOpen)), me ? 'My open pipeline' : 'Open pipeline', '#/t/deals'),
+        stat(String(myOpen.length), 'Open deals', '#/t/deals'),
+        stat(money(sumVal(wonMonth)), 'Won this month', '#/t/deals'),
+        stat(String(weekActs.filter((r) => !me || r.payload.rep === me).length), me ? 'My activities · 7 days' : 'Activities · 7 days', '#/t/activities')),
+      el('h3', { class: 'sub-head' }, 'Follow-ups due', el('span', {}, due.length)),
+      due.length ? el('div', { class: 'due-list' }, due.slice(0, 6).map((r) => {
+        const late = String(r.payload.follow_up).slice(0, 10) < today;
+        return el('button', { class: 'result due', onclick: () => openRecord(byKey.deals, r) },
+          el('span', { class: 'due-main' }, el('strong', {}, titleOf(byKey.deals, r)),
+            el('small', {}, [r.payload.company ? refLabel(compT, r.payload.company) : null, r.payload.next_step].filter(Boolean).join(' · ') || r.payload.stage || '')),
+          el('span', { class: 'kdue ' + (late ? 'late' : 'today') }, late ? fmtDate(r.payload.follow_up) : 'Today'));
+      })) : el('p', { class: 'hint' }, deals.length ? 'Nothing due. Go open new doors.' : 'No deals yet. Add your first deal to start the pipeline.'),
+      el('div', { class: 'actions-row', style: 'margin-top:12px' },
+        el('button', { class: 'btn primary sm', onclick: () => openRecord(byKey.activities, null, { date: today, rep: me || undefined }) }, icon('phone'), 'Log activity'),
+        el('button', { class: 'btn sm', onclick: () => openRecord(byKey.deals, null, { stage: 'New lead', owner: me || undefined, follow_up: today }) }, icon('plus'), 'New deal'),
+        !deals.length && hasSample() ? el('button', { class: 'btn sm', onclick: (e) => runSalesSample(e.currentTarget) }, 'Load sample deals') : null));
+
+    const tallyReps = {};
+    weekActs.forEach((r) => { if (r.payload.rep) tallyReps[r.payload.rep] = (tallyReps[r.payload.rep] || 0) + 1; });
+    const ranked = Object.entries(tallyReps).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const top = ranked.length ? ranked[0][1] : 1;
+    const board = el('section', { class: 'card span-4 reveal' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Leaderboard'), el('span', { class: 'eyebrow', style: 'margin-left:auto' }, 'Activities · 7 days')),
+      ranked.length ? el('ol', { class: 'leaders' }, ranked.map(([id, n], i) => el('li', { class: id === me ? 'me' : null },
+        el('span', { class: 'rank' }, i === 0 ? icon('trophy') : String(i + 1)),
+        el('span', { class: 'who' }, refLabel(usersT, id)),
+        el('span', { class: 'bar' }, el('i', { style: `width:${Math.max(8, Math.round(n / top * 100))}%` })),
+        el('b', {}, n))))
+        : el('p', { class: 'hint' }, 'Log calls, knocks and demos to get on the board.'));
 
     // Tally board — queue buttons with live counts
     const tally = el('div', { class: 'tally' }, settings.queues.map((q) => {
@@ -503,7 +574,6 @@
         el('a', { class: 'btn', href: '#/t/scriptbuilders' }, icon('layers'), 'Scriptbuilders & blasts PDFs')));
 
     // My projects
-    const me = settings.meId;
     const mine = me ? all.filter((r) => r.payload.assigned_to === me) : open;
     const who = settings.name ? `${settings.name}'s projects` : 'Open projects';
     const projCard = el('section', { class: 'card span-12 reveal grid-card', style: 'padding:0' },
@@ -518,7 +588,7 @@
             el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined }) }, icon('plus'), 'New project'),
             !all.length && !hasSample() ? el('button', { class: 'btn', onclick: (e) => runSample(e.currentTarget, true) }, 'Load sample data') : null)));
 
-    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), queues, searches, actions, projCard);
+    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), todayCard, board, queues, searches, actions, projCard);
   }
 
   // ---------------------------------------------------------------------
@@ -556,7 +626,7 @@
 
   async function renderTableView(spec, params) {
     await loadWithRefs(spec);
-    const st = ui[spec.key] || (ui[spec.key] = { q: '', chip: '', sort: spec.sort || null, mode: spec.view === 'calendar' ? 'calendar' : 'list', month: null });
+    const st = ui[spec.key] || (ui[spec.key] = { q: '', chip: '', sort: spec.sort || null, mode: spec.view === 'calendar' ? 'calendar' : spec.view === 'board' ? 'board' : 'list', month: null });
     const label = labelOf(spec);
     setCrumbs(settings.workspace || 'Workspace', label);
     const recs = cache[spec.key];
@@ -575,16 +645,22 @@
         spec.view === 'calendar' && dateField ? el('div', { class: 'chips', role: 'group', 'aria-label': 'View' },
           el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'calendar'), onclick: () => { st.mode = 'calendar'; render(); } }, 'Calendar'),
           el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'list'), onclick: () => { st.mode = 'list'; render(); } }, 'List')) : null,
+        spec.view === 'board' ? el('div', { class: 'chips', role: 'group', 'aria-label': 'View' },
+          el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'board'), onclick: () => { st.mode = 'board'; render(); } }, 'Pipeline'),
+          el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'list'), onclick: () => { st.mode = 'list'; render(); } }, 'List')) : null,
         el('button', { class: 'btn primary', onclick: () => openRecord(spec, null, newDefaults()) }, icon('plus'), `New ${spec.single}`)));
 
     if (!recs.length) {
       return el('div', {}, head, el('div', { class: 'card reveal' },
         emptyState(spec.icon, `No ${spec.label.toLowerCase()} yet`, `Add your first ${spec.single} and it shows up here.`,
-          el('button', { class: 'btn primary', onclick: () => openRecord(spec, null, newDefaults()) }, icon('plus'), `New ${spec.single}`))));
+          el('div', { class: 'actions-row', style: 'justify-content:center' },
+            el('button', { class: 'btn primary', onclick: () => openRecord(spec, null, newDefaults()) }, icon('plus'), `New ${spec.single}`),
+            (spec.key === 'deals' || spec.key === 'activities') && hasSample() ? el('button', { class: 'btn', onclick: (e) => runSalesSample(e.currentTarget) }, 'Load sample deals') : null))));
     }
 
     if (spec.view === 'notes') return el('div', {}, head, renderNotes(spec, recs));
     if (st.mode === 'calendar' && dateField) return el('div', {}, head, renderCalendar(spec, recs, dateField, st));
+    if (st.mode === 'board' && spec.boardField) return el('div', {}, head, renderBoard(spec, recs, spec.boardField, st));
 
     // List view
     const body = el('div', { class: 'card grid-card reveal' });
@@ -626,6 +702,129 @@
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 200));
     idle(() => base.forEach((r) => searchText(spec, r)));
     return el('div', {}, head, toolbar, body);
+  }
+
+  // Pipeline board (Salesforce-style kanban). Drag cards on desktop; tap the arrow to advance on a phone.
+  function renderBoard(spec, recs, field, st) {
+    const stages = typeOf(spec, field).options;
+    const mineOnly = st.mine && settings.meId;
+    const wrap = el('div', { class: 'board reveal' });
+    const search = el('input', { class: 'input', type: 'search', placeholder: 'Search deals', value: st.q || '', 'aria-label': 'Search deals' });
+    search.addEventListener('input', () => { st.q = search.value; fill(); });
+    const toolbar = el('div', { class: 'toolbar' },
+      el('div', { class: 'search' }, icon('search'), search),
+      settings.meId ? el('div', { class: 'chips' },
+        el('button', { class: 'chip', 'aria-pressed': String(!mineOnly), onclick: () => { st.mine = false; render(); } }, 'Everyone'),
+        el('button', { class: 'chip', 'aria-pressed': String(!!mineOnly), onclick: () => { st.mine = true; render(); } }, 'My deals')) : null);
+
+    function fill() {
+    const q = (st.q || '').trim().toLowerCase();
+    let rows = recs;
+    if (mineOnly) rows = rows.filter((r) => r.payload.owner === settings.meId);
+    if (q) rows = rows.filter((r) => searchText(spec, r).includes(q));
+    wrap.replaceChildren();
+    stages.forEach((stage, idx) => {
+      const items = sortRecords(spec, rows.filter((r) => (r.payload[field] || stages[0]) === stage), { field: 'follow_up', dir: 1 });
+      const total = items.reduce((a, r) => a + (Number(r.payload.value) || 0), 0);
+      const next = stages[idx + 1] && !DONE.has(stage) && !DONE.has(stages[idx + 1]) ? stages[idx + 1] : (stage === 'Negotiation' ? 'Won' : null);
+      const list = el('div', { class: 'kcol-list' }, items.length ? items.map((r) => {
+        const fu = r.payload.follow_up;
+        const late = fu && fu.slice(0, 10) < todayISO() && !DONE.has(stage);
+        const today = fu && fu.slice(0, 10) === todayISO();
+        const t = typeOf(spec, 'company');
+        return el('article', { class: 'kcard', draggable: 'true', tabIndex: 0, 'data-tilt': true,
+            ondragstart: (e) => { e.dataTransfer.setData('text/plain', r.id); e.currentTarget.classList.add('dragging'); },
+            ondragend: (e) => e.currentTarget.classList.remove('dragging'),
+            onclick: () => openRecord(spec, r), onkeydown: (e) => { if (e.key === 'Enter') openRecord(spec, r); } },
+          el('div', { class: 'kcard-top' }, el('strong', {}, titleOf(spec, r)), r.payload.value ? el('span', { class: 'kval' }, money(r.payload.value)) : null),
+          r.payload.company ? el('div', { class: 'kmeta' }, refLabel(t.target, r.payload.company)) : null,
+          r.payload.next_step ? el('div', { class: 'kstep' }, r.payload.next_step) : null,
+          el('div', { class: 'kfoot' },
+            fu ? el('span', { class: 'kdue' + (late ? ' late' : today ? ' today' : '') }, late ? 'Overdue · ' + fmtDate(fu) : today ? 'Follow up today' : 'Follow up ' + fmtDate(fu)) : el('span', { class: 'kdue none' }, 'No follow-up'),
+            r.payload.owner ? el('span', { class: 'kowner', title: refLabel(typeOf(spec, 'owner').target, r.payload.owner) }, initials(refLabel(typeOf(spec, 'owner').target, r.payload.owner))) : null,
+            next ? el('button', { class: 'knext', type: 'button', title: `Move to ${next}`, 'aria-label': `Move to ${next}`,
+              onclick: (e) => { e.stopPropagation(); moveStage(spec, r, field, next); } }, icon('arrowR')) : null));
+      }) : el('div', { class: 'kempty' }, 'Drop deals here'));
+      const col = el('section', { class: 'kcol', 'data-stage': stage, style: `--h:${hue(stage)}`,
+          ondragover: (e) => { e.preventDefault(); e.currentTarget.classList.add('over'); },
+          ondragleave: (e) => e.currentTarget.classList.remove('over'),
+          ondrop: (e) => {
+            e.preventDefault(); e.currentTarget.classList.remove('over');
+            const rec = recs.find((x) => x.id === e.dataTransfer.getData('text/plain'));
+            if (rec && (rec.payload[field] || stages[0]) !== stage) moveStage(spec, rec, field, stage);
+          } },
+        el('header', { class: 'kcol-head' },
+          el('span', { class: 'kdot' }), el('h3', {}, stage), el('span', { class: 'kcount' }, items.length),
+          el('span', { class: 'ktotal' }, money(total))),
+        list,
+        !DONE.has(stage) ? el('button', { class: 'kadd', type: 'button', onclick: () => openRecord(spec, null, { [field]: stage, owner: settings.meId || undefined }) }, icon('plus'), 'Add deal') : null);
+      wrap.append(col);
+    });
+    }
+    fill();
+    const jump = el('div', { class: 'board-jump', role: 'group', 'aria-label': 'Jump to stage' }, stages.map((stage) => {
+      const n = recs.filter((r) => (r.payload[field] || stages[0]) === stage && (!mineOnly || r.payload.owner === settings.meId)).length;
+      return el('button', { class: 'chip', type: 'button', style: `--h:${hue(stage)}`, onclick: () => {
+        const col = wrap.querySelector(`.kcol[data-stage="${CSS.escape(stage)}"]`);
+        if (col) wrap.scrollTo({ left: col.offsetLeft - wrap.offsetLeft - 16, behavior: reduceMotion() ? 'auto' : 'smooth' });
+      } }, el('span', { class: 'kdot' }), stage, el('span', { class: 'n' }, n));
+    }));
+    return el('div', {}, toolbar, jump, wrap);
+  }
+  const initials = (name) => String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
+
+  async function moveStage(spec, rec, field, stage) {
+    const patch = { [field]: stage };
+    if (stage === 'Won' || stage === 'Lost') { if (!rec.payload.close_date) patch.close_date = todayISO(); }
+    try {
+      await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
+      delete cache[spec.key];
+      toast(stage === 'Won' ? `Closed won: ${titleOf(spec, rec)}` : `Moved to ${stage}`);
+      await render();
+    } catch (e) { toast(e.message, true); }
+  }
+
+  // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
+  const OUTCOME_STAGE = { 'Demo set': 'Demo set', 'Proposal sent': 'Proposal sent', Sold: 'Won', 'Not interested': 'Lost' };
+  function quickLog(spec, rec) {
+    const type = el('select', { class: 'select', 'aria-label': 'Activity type' }, ACT_TYPES.map((t) => el('option', { value: t }, t)));
+    const fu = el('input', { class: 'input', type: 'date', 'aria-label': 'Next follow-up', value: rec.payload.follow_up ? String(rec.payload.follow_up).slice(0, 10) : '' });
+    const note = el('input', { class: 'input', type: 'text', placeholder: 'Quick note (optional)', 'aria-label': 'Quick note' });
+    const btns = el('div', { class: 'outcomes' }, OUTCOMES.map((o) => el('button', { type: 'button', class: 'outcome', style: `--h:${hue(o)}`, onclick: (e) => log(o, e.currentTarget) }, o)));
+    async function log(outcome, btn) {
+      $$('.outcome', btns).forEach((b) => { b.disabled = true; });
+      btn.classList.add('busy');
+      const p = rec.payload;
+      try {
+        await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
+          { subject: `${type.value} — ${outcome}`, type: type.value, outcome, deal: rec.id, date: todayISO() },
+          p.company ? { company: p.company } : {}, p.contact ? { contact: p.contact } : {},
+          settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}, note.value.trim() ? { notes: note.value.trim() } : {}) });
+        const cur = STAGE_LIST.indexOf(p.stage || STAGE_LIST[0]);
+        let to = OUTCOME_STAGE[outcome];
+        if (!to && cur === 0 && !['No answer', 'Left voicemail'].includes(outcome)) to = 'Contacted';
+        if (to && to !== 'Lost' && to !== 'Won' && STAGE_LIST.indexOf(to) <= cur) to = null;
+        if (DONE.has(p.stage)) to = null;
+        const patch = {};
+        if (to) patch.stage = to;
+        if (to === 'Won' || to === 'Lost') patch.close_date = todayISO();
+        if (fu.value && fu.value !== String(p.follow_up || '').slice(0, 10)) patch.follow_up = fu.value;
+        if (Object.keys(patch).length) await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
+        delete cache.activities; delete cache[spec.key];
+        toast(`Logged ${outcome}` + (to ? ` · moved to ${to}` : ''));
+        closeDrawer();
+        await render();
+        refreshCounts();
+      } catch (e) {
+        toast(e.message, true);
+        $$('.outcome', btns).forEach((b) => { b.disabled = false; });
+        btn.classList.remove('busy');
+      }
+    }
+    return el('div', { class: 'quicklog wide' },
+      el('h3', {}, icon('phone'), 'Log activity'),
+      el('div', { class: 'quicklog-row' }, type, el('label', { class: 'ql-fu' }, el('span', {}, 'Next follow-up'), fu)),
+      note, btns);
   }
 
   // Notepad
@@ -699,6 +898,8 @@
     $$('#drawer .drawer-body > *').forEach((n, i) => n.style.setProperty('--i', Math.min(i, 16)));
     const first = $('#drawer input, #drawer select, #drawer textarea');
     (first || $('#drawer')).focus({ preventScroll: true });
+    $('#drawer').scrollTop = 0;
+    requestAnimationFrame(() => { $('#drawer').scrollTop = 0; });
   }
 
   function inputFor(spec, field, value) {
@@ -738,6 +939,7 @@
     const errorBox = el('div', { class: 'form-error', role: 'alert', hidden: true });
     const form = el('form', { class: 'drawer-body', novalidate: true, onsubmit: (e) => { e.preventDefault(); save(); } },
       errorBox,
+      rec && spec.key === 'deals' && byKey.activities ? quickLog(spec, rec) : null,
       fields.map((k) => {
         const t = typeOf(spec, k);
         const wide = k === titleField || t.base === 'LONGTEXT';
@@ -888,22 +1090,50 @@
       ['sales_events', 'x1', { event: 'Oakline demo + proposal', date: day(4), status: 'Planned', company: '@c3', value: 1200 }],
       ['sales_events', 'x2', { event: 'Summit Ridge renewal', date: day(-6), status: 'Done', company: '@c2', value: 2400 }],
 
+      ['deals', 'd1', { deal_name: 'Oakline — on-hold package', stage: 'Demo set', value: 1200, company: '@c3', contact: '@p3', owner: '@u2', source: 'Door knock', follow_up: day(0), next_step: 'Play voice + music options' }],
+      ['deals', 'd2', { deal_name: 'Summit Ridge — 2nd location', stage: 'Proposal sent', value: 900, company: '@c2', contact: '@p2', owner: '@u2', source: 'Referral', follow_up: day(-1), next_step: 'Call Chris about the proposal' }],
+      ['deals', 'd3', { deal_name: 'Blue Harbor — seasonal rotation', stage: 'Negotiation', value: 600, company: '@c1', contact: '@p1', owner: '@u1', source: 'Existing customer', follow_up: day(2), next_step: 'Confirm quarterly pricing' }],
+      ['deals', 'd4', { deal_name: 'Valley Vet Clinic', stage: 'New lead', value: 1500, owner: '@u2', source: 'Cold call', follow_up: day(1), next_step: 'First call' }],
+      ['deals', 'd5', { deal_name: 'Golden Hills Chiropractic', stage: 'Contacted', value: 1100, owner: '@u1', source: 'Flyer', follow_up: day(-3), next_step: 'Get past the front desk' }],
+      ['deals', 'd6', { deal_name: 'Summit Ridge renewal', stage: 'Won', value: 2400, company: '@c2', contact: '@p2', owner: '@u2', source: 'Existing customer', close_date: day(0) }],
+      ['deals', 'd7', { deal_name: 'Pine Street Bakery', stage: 'Lost', value: 700, owner: '@u1', source: 'Door knock', close_date: day(-10) }],
+
+      ['activities', 'a1', { subject: 'Door knock — Demo set', type: 'Door knock', outcome: 'Demo set', deal: '@d1', company: '@c3', contact: '@p3', rep: '@u2', date: day(-2) }],
+      ['activities', 'a2', { subject: 'Call — Gatekeeper', type: 'Call', outcome: 'Gatekeeper', deal: '@d5', rep: '@u1', date: day(-1) }],
+      ['activities', 'a3', { subject: 'Email — Proposal sent', type: 'Email', outcome: 'Proposal sent', deal: '@d2', company: '@c2', contact: '@p2', rep: '@u2', date: day(-3) }],
+      ['activities', 'a4', { subject: 'Call — No answer', type: 'Call', outcome: 'No answer', deal: '@d4', rep: '@u2', date: day(0) }],
+      ['activities', 'a5', { subject: 'Meeting — Sold', type: 'Meeting', outcome: 'Sold', deal: '@d6', company: '@c2', rep: '@u2', date: day(0) }],
+      ['activities', 'a6', { subject: 'Meeting — Callback set', type: 'Meeting', outcome: 'Callback set', deal: '@d3', company: '@c1', contact: '@p1', rep: '@u1', date: day(-1) }],
+
       ['notepad', 'n1', { title: 'Sample data', body: 'Everything you see right now is fictional placeholder data. Remove it in Settings → Sample data before importing real records.', pinned: true }],
       ['notepad', 'n2', { title: 'Hold message checklist', body: 'Confirm hours\nConfirm promo end date\nPick voice + music bed\nSend script for approval' }],
       ['notepad', 'n3', { title: 'Ideas', body: 'Seasonal greeting rotation offer for multi-location accounts.' }]
     ];
   }
 
-  async function loadSampleData() {
+  async function loadSampleData(only) {
     const ids = {};       // placeholder -> real record id
     const made = {};      // spec key -> [ids]
-    for (const [key, ref, payload] of sampleSet()) {
+    const set = sampleSet();
+    if (only) {
+      // Link new sample records to sample customers/users already in this workspace
+      for (const [key, ref, payload] of set) {
+        if (only.includes(key) || !byKey[key]) continue;
+        const spec = byKey[key];
+        const recs = await load(spec, true);
+        const want = spec.title ? spec.title(payload) : null;
+        const hit = want && recs.find((r) => titleOf(spec, r) === want);
+        if (hit) ids[ref] = hit.id;
+      }
+    }
+    for (const [key, ref, payload] of set) {
       const spec = byKey[key];
-      if (!spec) continue;
+      if (!spec || (only && !only.includes(key))) continue;
       const body = {};
       for (const [k, v] of Object.entries(payload)) {
         if (!(k in schemaOf(spec))) continue;
         body[k] = typeof v === 'string' && v.startsWith('@') ? ids[v.slice(1)] : v;
+        if (body[k] === undefined) delete body[k];
       }
       const r = await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload: body });
       ids[ref] = r.record.id;
@@ -1068,6 +1298,16 @@
             : el('button', { class: 'btn', type: 'button', onclick: (e) => runSample(e.currentTarget, true) }, icon('plus'), 'Load sample data'))),
         backup),
       el('div', { class: 'drawer-foot' }, el('span', { class: 'spacer' }), el('button', { class: 'btn ghost', onclick: closeDrawer }, 'Cancel'), saveBtn));
+  }
+  async function runSalesSample(btn) {
+    btn.disabled = true;
+    btn.textContent = 'Loading…';
+    try {
+      await loadSampleData(['deals', 'activities']);
+      toast('Sample deals loaded');
+      await render();
+      refreshCounts();
+    } catch (e) { toast(e.message, true); btn.disabled = false; }
   }
   async function runSample(btn, add) {
     if (!add && !confirm('Remove all sample records? Records you added yourself stay.')) return;
