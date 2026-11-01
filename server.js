@@ -31,7 +31,7 @@ pool.on('error', (err) => console.error('[pg] idle client error', err.message));
 // Schema + validation: shared with the browser engine so both modes
 // enforce identical rules (see public/local-engine.js)
 // ---------------------------------------------------------------------
-const { validateSchemaDef, sanitizePayload, coerce, parseType, isUuid, HttpError } =
+const { validateSchemaDef, mergeSchema, sanitizePayload, coerce, parseType, isUuid, HttpError } =
   require('./public/local-engine.js');
 
 /** Make sure every REF value in a payload points at a real record in the right table. */
@@ -119,6 +119,26 @@ app.post('/api/registry/create-table', wrap(async (req, res) => {
     if (e.code === '23505') throw new HttpError(409, 'A table with that name already exists in this app');
     throw e;
   }
+}));
+
+// 1b. Evolve a table's schema: add fields, change pick-list options. Never drops data.
+app.post('/api/registry/update-schema', wrap(async (req, res) => {
+  const { registry_id, fields_schema } = req.body || {};
+  const reg = await getRegistry(pool, registry_id);
+  const merged = mergeSchema(reg.fields_schema, fields_schema);
+  const targets = [...new Set(Object.values(merged).filter((t) => t.startsWith('REF:')).map((t) => t.slice(4)))];
+  if (targets.length) {
+    const { rows } = await pool.query('SELECT id FROM sys_registry WHERE id = ANY($1::uuid[])', [targets]);
+    const have = new Set(rows.map((r) => r.id));
+    const missing = targets.filter((t) => !have.has(t));
+    if (missing.length) throw new HttpError(400, 'Reference target table(s) not found', missing);
+  }
+  const { rows } = await pool.query(
+    `UPDATE sys_registry SET fields_schema = $2::jsonb, updated_at = now() WHERE id = $1
+     RETURNING id, app_name, table_name, fields_schema, created_at, updated_at`,
+    [reg.id, JSON.stringify(merged)]
+  );
+  res.json({ table: rows[0] });
 }));
 
 app.get('/api/registry/list', wrap(async (req, res) => {

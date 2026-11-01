@@ -83,6 +83,7 @@ POST /api/vault/link-records
 |---|---|---|
 | GET | `/api/health` | — |
 | POST | `/api/registry/create-table` | `app_name, table_name, fields_schema` |
+| POST | `/api/registry/update-schema` | `registry_id, fields_schema` (adds fields / changes pick lists; never drops fields or changes a field type) |
 | GET | `/api/registry/list` | — |
 | GET | `/api/registry/:id` | — |
 | POST | `/api/vault/insert-record` | `registry_id, payload` |

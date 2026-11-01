@@ -67,6 +67,24 @@
     return clean;
   }
 
+  /**
+   * Evolve a table's schema without losing data: new fields are added, pick-list
+   * options may change, every existing field is kept, and a field's base type
+   * (TEXT, NUMBER, REF...) can't change.
+   */
+  function mergeSchema(current, incoming) {
+    const next = validateSchemaDef(incoming);
+    const merged = Object.assign({}, current), errors = [];
+    for (const [k, t] of Object.entries(next)) {
+      if (!(k in current)) { merged[k] = t; continue; }
+      const a = parseType(current[k]), b = parseType(t);
+      if (a.base !== b.base || (a.base === 'REF' && a.target !== b.target)) { errors.push(`${k}: type can't change from ${current[k]} to ${t}`); continue; }
+      merged[k] = t;
+    }
+    if (errors.length) throw new HttpError(400, 'Invalid schema change', errors);
+    return merged;
+  }
+
   function coerceText(raw) {
     if (typeof raw === 'object') return { ok: false, error: 'expected text' };
     const s = String(raw);
@@ -260,6 +278,18 @@
       return { __status: 201, registry_id: row.id, table: clone(row) };
     },
 
+    'POST /api/registry/update-schema': async (b) => {
+      const reg = getRegistry(b.registry_id);
+      const merged = mergeSchema(reg.fields_schema, b.fields_schema);
+      const targets = [...new Set(Object.values(merged).filter((t) => t.startsWith('REF:')).map((t) => t.slice(4)))];
+      const missing = targets.filter((t) => !state.registry.some((r) => r.id === t));
+      if (missing.length) throw new HttpError(400, 'Reference target table(s) not found', missing);
+      reg.fields_schema = merged;
+      reg.updated_at = now();
+      await save();
+      return { table: clone(reg) };
+    },
+
     'POST /api/vault/insert-record': async (b) => {
       const reg = getRegistry(b.registry_id);
       const { clean, dropped } = sanitizePayload(reg.fields_schema, b.payload);
@@ -386,7 +416,7 @@
 
   const api = {
     request, exportData, importData,
-    validateSchemaDef, sanitizePayload, coerce, parseType, isUuid, HttpError,
+    validateSchemaDef, mergeSchema, sanitizePayload, coerce, parseType, isUuid, HttpError,
     _reset: () => { state = emptyState(); loading = Promise.resolve(); }
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -83,3 +83,18 @@ test('update-record merges, clears, validates', async () => {
   const other = await V.request('POST', '/api/registry/create-table', { app_name: 'A', table_name: 'Q', fields_schema: { n: 'TEXT' } });
   assert.equal((await V.request('POST', '/api/vault/update-record', { registry_id: other.body.registry_id, record_id: rec.id, payload: { n: 'x' } })).status, 404);
 });
+
+test('update-schema adds fields and changes pick lists without dropping data', async () => {
+  const L = require('../public/local-engine.js');
+  L._reset();
+  const t = await L.request('POST', '/api/registry/create-table', { app_name: 'T', table_name: 'Homes', fields_schema: { name: 'TEXT', status: 'CHOICE:Lead|Active' } });
+  const id = t.body.registry_id;
+  await L.request('POST', '/api/vault/insert-record', { registry_id: id, payload: { name: 'A', status: 'Active' } });
+  const up = await L.request('POST', '/api/registry/update-schema', { registry_id: id, fields_schema: { status: 'CHOICE:Lead|Customer', bill: 'NUMBER' } });
+  assert.equal(up.status, 200);
+  assert.deepEqual(Object.keys(up.body.table.fields_schema).sort(), ['bill', 'name', 'status']);
+  const bad = await L.request('POST', '/api/registry/update-schema', { registry_id: id, fields_schema: { name: 'NUMBER' } });
+  assert.equal(bad.status, 400);
+  const recs = await L.request('POST', '/api/vault/query-records', { registry_id: id });
+  assert.equal(recs.body.records[0].payload.name, 'A');
+});

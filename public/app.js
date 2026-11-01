@@ -92,12 +92,13 @@
   // ---------------------------------------------------------------------
   // Settings (per device)
   // ---------------------------------------------------------------------
-  const DEFAULT_QUEUES = ['Downloads/Callbacks', 'DL/CB Manager', 'Tech Support', 'Billing', 'Sales'];
+  const OLD_QUEUES = ['Downloads/Callbacks', 'DL/CB Manager', 'Tech Support', 'Billing', 'Sales'];
+  const DEFAULT_QUEUES = ['Site survey', 'Design & permits', 'Install crew', 'Utility & PTO', 'Customer care'];
   const settings = Object.assign(
     { name: '', meId: '', workspace: 'Workspace', theme: '', apiKey: '', queues: DEFAULT_QUEUES, welcomed: false },
     (() => { try { return JSON.parse(localStorage.getItem('vault_settings') || '{}'); } catch (_) { return {}; } })()
   );
-  if (!Array.isArray(settings.queues) || !settings.queues.length) settings.queues = DEFAULT_QUEUES.slice();
+  if (!Array.isArray(settings.queues) || !settings.queues.length || settings.queues.join('|') === OLD_QUEUES.join('|')) settings.queues = DEFAULT_QUEUES.slice();
   function saveSettings() {
     try { localStorage.setItem('vault_settings', JSON.stringify(settings)); } catch (_) {}
   }
@@ -143,70 +144,87 @@
   // Workspace definition
   // ---------------------------------------------------------------------
   const APP = 'Workspace';
-  const STATUS = 'CHOICE:Intake|Scripting|Production|Review|Delivered|On hold';
-  const STAGE_LIST = ['New lead', 'Contacted', 'Demo set', 'Proposal sent', 'Negotiation', 'Won', 'Lost'];
+  const STATUS = 'CHOICE:Site survey|Design|Permit|Install|Inspection|PTO|On hold';
+  const STAGE_LIST = ['New lead', 'Contacted', 'Appointment set', 'Proposal sent', 'Negotiation', 'Won', 'Lost'];
   const STAGES = 'CHOICE:' + STAGE_LIST.join('|');
-  const OUTCOMES = ['No answer', 'Left voicemail', 'Gatekeeper', 'Callback set', 'Demo set', 'Proposal sent', 'Sold', 'Not interested'];
-  const ACT_TYPES = ['Call', 'Door knock', 'Email', 'Text', 'Meeting', 'Demo'];
+  const OUTCOMES = ['No answer', 'Left voicemail', 'Not home', 'Callback set', 'Appointment set', 'Proposal sent', 'Sold', 'Not interested'];
+  const ACT_TYPES = ['Door knock', 'Call', 'Text', 'Email', 'Appointment', 'Follow-up visit'];
   const f = (n, t, extra) => Object.assign({ n, t }, extra);
   const full = (...parts) => parts.filter(Boolean).join(' ').trim();
 
   // Order here = creation order (link targets come first).
   const SPEC = [
-    { key: 'users', table: 'Users', label: 'Users', single: 'user', icon: 'users', group: 'Directory',
-      fields: [f('name', 'TEXT'), f('role', 'CHOICE:Admin|Production|Sales|Support|Billing'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('active', 'BOOLEAN')],
+    { key: 'users', table: 'Users', label: 'Team', single: 'team member', icon: 'users', group: 'Directory',
+      fields: [f('name', 'TEXT'), f('role', 'CHOICE:Admin|Setter|Closer|Install coordinator|Support'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('active', 'BOOLEAN')],
       title: (p) => p.name, columns: ['name', 'role', 'email', 'phone', 'active'] },
-    { key: 'companies', table: 'Companies', label: 'Companies', single: 'company', icon: 'building', group: 'Directory',
-      fields: [f('company_name', 'TEXT'), f('status', 'CHOICE:Lead|Active|Inactive'), f('phone', 'PHONE'), f('website', 'URL'), f('industry', 'TEXT'), f('notes', 'LONGTEXT')],
-      title: (p) => p.company_name, columns: ['company_name', 'status', 'phone', 'website', 'industry'] },
-    { key: 'locations', table: 'Locations', label: 'Locations', single: 'location', icon: 'pin', group: 'Directory',
-      fields: [f('location_name', 'TEXT'), f('company', 'REF:@companies'), f('address', 'TEXT'), f('city', 'TEXT'), f('state', 'TEXT'), f('zip', 'TEXT'), f('phone', 'PHONE')],
-      title: (p) => p.location_name, columns: ['location_name', 'company', 'city', 'state', 'phone'] },
+    { key: 'companies', table: 'Companies', label: 'Homeowners', single: 'homeowner', icon: 'home', group: 'Directory',
+      fields: [f('company_name', 'TEXT', { label: 'Household' }), f('status', 'CHOICE:Lead|Customer|Past customer|Not a fit'), f('phone', 'PHONE'),
+        f('utility', 'CHOICE:PG&E|SMUD|Roseville Electric|Other'), f('avg_monthly_bill', 'NUMBER', { label: 'Avg monthly bill ($)' }),
+        f('roof_type', 'CHOICE:Composition shingle|Tile|Metal|Flat|Other'), f('roof_age', 'NUMBER', { label: 'Roof age (years)' }),
+        f('shade', 'CHOICE:None|Some|Heavy'), f('hoa', 'BOOLEAN', { label: 'HOA' }), f('website', 'URL'), f('industry', 'TEXT'), f('notes', 'LONGTEXT')],
+      hide: ['website', 'industry'],
+      title: (p) => p.company_name, columns: ['company_name', 'status', 'utility', 'avg_monthly_bill', 'phone'] },
+    { key: 'locations', table: 'Locations', label: 'Properties', single: 'property', icon: 'pin', group: 'Directory',
+      fields: [f('location_name', 'TEXT', { label: 'Property' }), f('company', 'REF:@companies', { label: 'Homeowner' }), f('address', 'TEXT'), f('city', 'TEXT'), f('state', 'TEXT'), f('zip', 'TEXT'), f('phone', 'PHONE')],
+      title: (p) => p.location_name, columns: ['location_name', 'company', 'address', 'city', 'zip'] },
     { key: 'contacts', table: 'Contacts', label: 'Contacts', single: 'contact', icon: 'contact', group: 'Directory',
-      fields: [f('first_name', 'TEXT'), f('last_name', 'TEXT'), f('company', 'REF:@companies'), f('location', 'REF:@locations'), f('job_title', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE')],
-      title: (p) => full(p.first_name, p.last_name), columns: ['first_name', 'last_name', 'company', 'job_title', 'email', 'phone'] },
-    { key: 'vendors', table: 'Vendors', label: 'Vendors', single: 'vendor', icon: 'truck', group: 'Directory',
-      fields: [f('vendor_name', 'TEXT'), f('service', 'TEXT'), f('contact_name', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('website', 'URL'), f('notes', 'LONGTEXT')],
+      fields: [f('first_name', 'TEXT'), f('last_name', 'TEXT'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('location', 'REF:@locations', { label: 'Property' }),
+        f('job_title', 'TEXT', { label: 'Role' }), f('decision_maker', 'BOOLEAN', { label: 'Decision-maker' }), f('email', 'EMAIL'), f('phone', 'PHONE')],
+      title: (p) => full(p.first_name, p.last_name), columns: ['first_name', 'last_name', 'company', 'job_title', 'phone', 'email'] },
+    { key: 'vendors', table: 'Vendors', label: 'Partners', single: 'partner', icon: 'truck', group: 'Directory',
+      fields: [f('vendor_name', 'TEXT', { label: 'Partner' }), f('service', 'TEXT'), f('contact_name', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('website', 'URL'), f('notes', 'LONGTEXT')],
       title: (p) => p.vendor_name, columns: ['vendor_name', 'service', 'contact_name', 'email', 'phone'] },
     { key: 'deals', table: 'Deals', label: 'Deals', single: 'deal', icon: 'target', group: 'Sales', view: 'board', boardField: 'stage',
-      fields: [f('deal_name', 'TEXT'), f('stage', STAGES), f('value', 'NUMBER', { label: 'Value ($)' }), f('company', 'REF:@companies'), f('contact', 'REF:@contacts'),
-        f('owner', 'REF:@users'), f('source', 'CHOICE:Door knock|Cold call|Referral|Website|Event|Flyer|Existing customer|Other'),
+      fields: [f('deal_name', 'TEXT'), f('stage', STAGES), f('value', 'NUMBER', { label: 'Contract value ($)' }), f('system_size_kw', 'NUMBER', { label: 'System size (kW)' }),
+        f('financing', 'CHOICE:PPA|Lease|Loan|Cash'), f('battery', 'BOOLEAN', { label: 'Battery' }),
+        f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'),
+        f('owner', 'REF:@users', { label: 'Rep' }), f('source', 'CHOICE:Door knock|Cold call|Referral|Website|Event|Flyer|Existing customer|Other'),
         f('follow_up', 'DATE'), f('next_step', 'TEXT'), f('close_date', 'DATE'), f('notes', 'LONGTEXT')],
-      title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'value', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
+      title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'system_size_kw', 'financing', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
     { key: 'activities', table: 'Activities', label: 'Activities', single: 'activity', icon: 'phone', group: 'Sales',
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
-        f('company', 'REF:@companies'), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
+        f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
       title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date'], sort: { field: 'date', dir: -1 } },
-    { key: 'projects', table: 'Projects', label: 'Projects', single: 'project', icon: 'folder', group: 'Production',
-      fields: [f('project_title', 'TEXT'), f('status', STATUS), f('queue', 'TEXT', { ui: 'queue' }), f('assigned_to', 'REF:@users'),
-        f('company', 'REF:@companies'), f('project_type', 'CHOICE:Implementation|Production only|Script update|Any'), f('date_due', 'DATE'),
-        f('url', 'URL'), f('url_details', 'TEXT'), f('project_attachment', 'URL'), f('notes', 'LONGTEXT')],
+    { key: 'projects', table: 'Projects', label: 'Installs', single: 'install', icon: 'folder', group: 'Installs',
+      fields: [f('project_title', 'TEXT', { label: 'Install' }), f('status', STATUS, { label: 'Step' }), f('queue', 'TEXT', { ui: 'queue', label: 'Team' }), f('assigned_to', 'REF:@users'),
+        f('company', 'REF:@companies', { label: 'Homeowner' }), f('project_type', 'CHOICE:Solar|Solar + battery|Battery only|Panel upgrade', { label: 'System type' }), f('date_due', 'DATE'),
+        f('url', 'URL', { label: 'Design / plans link' }), f('url_details', 'TEXT', { label: 'Link notes' }), f('project_attachment', 'URL', { label: 'Permit / docs link' }), f('notes', 'LONGTEXT')],
       title: (p) => p.project_title,
-      columns: ['status', 'assigned_to', 'company', 'project_title', 'project_type', 'date_due', 'url', 'url_details', 'project_attachment'],
+      columns: ['status', 'assigned_to', 'company', 'project_title', 'project_type', 'date_due', 'url', 'project_attachment'],
       sort: { field: 'date_due', dir: 1 } },
-    { key: 'indi_projects', table: 'Indi Projects', label: 'Indi projects', single: 'indi project', icon: 'folderUser', group: 'Production',
-      fields: [f('project_title', 'TEXT'), f('status', STATUS), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies'), f('date_due', 'DATE'), f('url', 'URL'), f('notes', 'LONGTEXT')],
+    { key: 'indi_projects', table: 'Indi Projects', label: 'My tasks', single: 'task', icon: 'folderUser', group: 'Installs',
+      fields: [f('project_title', 'TEXT', { label: 'Task' }), f('status', STATUS, { label: 'Step' }), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('date_due', 'DATE'), f('url', 'URL'), f('notes', 'LONGTEXT')],
       title: (p) => p.project_title, columns: ['project_title', 'status', 'assigned_to', 'company', 'date_due'], sort: { field: 'date_due', dir: 1 } },
-    { key: 'scripts_mail', table: 'Scripts Mail', label: 'Scripts mail', single: 'script', icon: 'mail', group: 'Production',
-      fields: [f('subject', 'TEXT'), f('status', 'CHOICE:New|In progress|Done'), f('company', 'REF:@companies'), f('contact', 'REF:@contacts'), f('received', 'DATE'), f('script', 'LONGTEXT')],
+    { key: 'scripts_mail', table: 'Scripts Mail', label: 'Customer messages', single: 'message', icon: 'mail', group: 'Installs',
+      fields: [f('subject', 'TEXT'), f('status', 'CHOICE:New|In progress|Done'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('received', 'DATE'), f('script', 'LONGTEXT', { label: 'Message' })],
       title: (p) => p.subject, columns: ['subject', 'status', 'company', 'contact', 'received'] },
-    { key: 'scripts_sent', table: 'Scripts Sent Mail', label: 'Scripts sent mail', single: 'sent script', icon: 'send', group: 'Production',
-      fields: [f('subject', 'TEXT'), f('company', 'REF:@companies'), f('sent_to', 'EMAIL'), f('date_sent', 'DATE'), f('script', 'LONGTEXT')],
+    { key: 'scripts_sent', table: 'Scripts Sent Mail', label: 'Sent proposals', single: 'sent proposal', icon: 'send', group: 'Sales',
+      fields: [f('subject', 'TEXT'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('sent_to', 'EMAIL'), f('date_sent', 'DATE'), f('script', 'LONGTEXT', { label: 'Notes' })],
       title: (p) => p.subject, columns: ['subject', 'company', 'sent_to', 'date_sent'] },
-    { key: 'scriptbuilders', table: 'Scriptbuilders & Blasts', label: 'Scriptbuilders & blasts', single: 'PDF', icon: 'layers', group: 'Production',
-      fields: [f('title', 'TEXT'), f('kind', 'CHOICE:Scriptbuilder|Blast'), f('pdf_link', 'URL', { label: 'PDF link' }), f('date', 'DATE'), f('notes', 'LONGTEXT')],
+    { key: 'scriptbuilders', table: 'Scriptbuilders & Blasts', label: 'Pitch & flyer PDFs', single: 'PDF', icon: 'layers', group: 'Sales',
+      fields: [f('title', 'TEXT'), f('kind', 'CHOICE:Scriptbuilder|Blast|Pitch|Flyer|Training', { label: 'Type' }), f('pdf_link', 'URL', { label: 'PDF link' }), f('date', 'DATE'), f('notes', 'LONGTEXT')],
       title: (p) => p.title, columns: ['title', 'kind', 'pdf_link', 'date'] },
     { key: 'calendar', table: 'Calendar', label: 'Calendar', single: 'event', icon: 'calendar', group: 'Schedule', view: 'calendar', dateField: 'date',
-      fields: [f('title', 'TEXT'), f('date', 'DATE'), f('time', 'TEXT'), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies'), f('notes', 'LONGTEXT')],
+      fields: [f('title', 'TEXT'), f('date', 'DATE'), f('time', 'TEXT'), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('notes', 'LONGTEXT')],
       title: (p) => p.title, columns: ['title', 'date', 'time', 'assigned_to', 'company'], sort: { field: 'date', dir: 1 } },
-    { key: 'sales_events', table: 'Sales Events', label: 'Sales events', single: 'sales event', icon: 'trend', group: 'Schedule', view: 'calendar', dateField: 'date',
-      fields: [f('event', 'TEXT'), f('date', 'DATE'), f('status', 'CHOICE:Planned|Done|Cancelled'), f('company', 'REF:@companies'), f('value', 'NUMBER'), f('notes', 'LONGTEXT')],
-      title: (p) => p.event, columns: ['event', 'date', 'status', 'company', 'value'], sort: { field: 'date', dir: 1 } },
+    { key: 'sales_events', table: 'Sales Events', label: 'Canvass events', single: 'canvass event', icon: 'trend', group: 'Schedule', view: 'calendar', dateField: 'date',
+      fields: [f('event', 'TEXT'), f('date', 'DATE'), f('status', 'CHOICE:Planned|Done|Cancelled'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('value', 'NUMBER', { label: 'Doors knocked' }), f('notes', 'LONGTEXT')],
+      title: (p) => p.event, columns: ['event', 'date', 'status', 'value'], sort: { field: 'date', dir: 1 } },
     { key: 'notepad', table: 'Notepad', label: 'Notepad', single: 'note', icon: 'note', group: 'Notes', view: 'notes',
       fields: [f('title', 'TEXT'), f('body', 'LONGTEXT'), f('pinned', 'BOOLEAN')],
       title: (p) => p.title, columns: ['title', 'body', 'pinned'] }
   ];
-  const GROUPS = ['Sales', 'Directory', 'Production', 'Schedule', 'Notes', 'Custom'];
+  // One-time value moves when old pick-list options are renamed (message-on-hold → solar)
+  const MIGRATE = {
+    users: { role: { Sales: 'Closer', Production: 'Install coordinator', Billing: 'Support' } },
+    companies: { status: { Active: 'Customer', Inactive: 'Past customer' } },
+    deals: { stage: { 'Demo set': 'Appointment set' } },
+    activities: { outcome: { 'Demo set': 'Appointment set', Gatekeeper: 'Not home' }, type: { Meeting: 'Appointment', Demo: 'Appointment' } },
+    projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO' },
+      project_type: { Implementation: null, 'Production only': null, 'Script update': null, Any: null } },
+    indi_projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO' } }
+  };
+  const GROUPS = ['Sales', 'Directory', 'Installs', 'Schedule', 'Notes', 'Custom'];
   const BOTTOM = ['home', 'deals', 'projects', 'calendar'];
 
   let specs = [];             // SPEC entries + custom tables, each with .reg
@@ -227,13 +245,21 @@
     specs = [];
     for (const s of SPEC) {
       let reg = mine.get(s.table);
+      const fields_schema = {};
+      for (const fd of s.fields) {
+        fields_schema[fd.n] = fd.t.startsWith('REF:@') ? 'REF:' + byKey[fd.t.slice(5)].reg.id : fd.t;
+      }
       if (!reg) {
-        const fields_schema = {};
-        for (const fd of s.fields) {
-          fields_schema[fd.n] = fd.t.startsWith('REF:@') ? 'REF:' + byKey[fd.t.slice(5)].reg.id : fd.t;
-        }
         const r = await api('POST', '/api/registry/create-table', { app_name: APP, table_name: s.table, fields_schema });
         reg = Object.assign(r.table, { record_count: 0 });
+      } else if (Object.entries(fields_schema).some(([k, t]) => reg.fields_schema[k] !== t)) {
+        // This device has an older layout of the table: add new fields / update pick lists, keep all data
+        try {
+          const count = reg.record_count;
+          const r = await api('POST', '/api/registry/update-schema', { registry_id: reg.id, fields_schema });
+          reg = Object.assign(r.table, { record_count: count });
+          await migrateValues(s.key, reg);
+        } catch (e) { console.warn('Schema update skipped for', s.table, e.message); }
       }
       const spec = Object.assign({}, s, { reg });
       specs.push(spec);
@@ -251,6 +277,22 @@
       specs.push(spec);
       byKey[spec.key] = spec;
       byRegId[t.id] = spec;
+    }
+  }
+
+  async function migrateValues(key, reg) {
+    const map = MIGRATE[key];
+    if (!map) return;
+    const { records } = await api('POST', '/api/vault/query-records', { registry_id: reg.id, limit: 500 });
+    for (const rec of records) {
+      const patch = {};
+      for (const [field, moves] of Object.entries(map)) {
+        const v = rec.payload[field];
+        if (v !== undefined && Object.prototype.hasOwnProperty.call(moves, v)) patch[field] = moves[v];
+      }
+      if (Object.keys(patch).length) {
+        try { await api('POST', '/api/vault/update-record', { registry_id: reg.id, record_id: rec.id, payload: patch }); } catch (_) {}
+      }
     }
   }
 
@@ -298,7 +340,7 @@
   // Value display
   // ---------------------------------------------------------------------
   const HUES = { delivered: 150, done: 150, active: 150, 'in progress': 210, production: 36, scripting: 265, review: 190, intake: 220,
-    lead: 285, new: 210, 'new lead': 220, contacted: 200, 'demo set': 265, 'proposal sent': 36, negotiation: 320, won: 150, lost: 0, sold: 150, 'not interested': 0, 'no answer': 30, 'left voicemail': 30, gatekeeper: 45, 'callback set': 190, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
+    lead: 285, new: 210, 'new lead': 220, contacted: 200, 'appointment set': 265, 'not home': 45, 'site survey': 220, design: 265, permit: 36, install: 200, inspection: 190, pto: 150, customer: 150, 'past customer': 0, 'not a fit': 0, 'proposal sent': 36, negotiation: 320, won: 150, lost: 0, sold: 150, 'not interested': 0, 'no answer': 30, 'left voicemail': 30, gatekeeper: 45, 'callback set': 190, planned: 210, 'on hold': 8, cancelled: 8, inactive: 0, implementation: 320, blast: 340, scriptbuilder: 190 };
   function hue(s) {
     const k = String(s).toLowerCase();
     if (k in HUES) return HUES[k];
@@ -319,7 +361,7 @@
     if (y !== new Date().getFullYear()) opts.year = 'numeric';
     return dt.toLocaleDateString(undefined, opts);
   }
-  const DONE = new Set(['Delivered', 'Done', 'Cancelled', 'Won', 'Lost']);
+  const DONE = new Set(['Delivered', 'PTO', 'Done', 'Cancelled', 'Won', 'Lost']);
   const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 
   function display(spec, field, rec) {
@@ -341,7 +383,7 @@
       case 'EMAIL': return el('a', { href: 'mailto:' + v, onclick: (e) => e.stopPropagation() }, v);
       case 'PHONE': return el('a', { class: 'cell-mono', href: 'tel:' + v.replace(/[^\d+]/g, ''), onclick: (e) => e.stopPropagation() }, v);
       case 'BOOLEAN': return v ? pill('Yes') : null;
-      case 'NUMBER': return el('span', { class: 'cell-mono' }, field === 'value' ? money(v) : Number(v).toLocaleString());
+      case 'NUMBER': return el('span', { class: 'cell-mono' }, /\(\$\)/.test(fieldLabel(spec, field)) ? money(v) : field === 'system_size_kw' ? `${Number(v)} kW` : Number(v).toLocaleString());
       case 'LONGTEXT': return el('span', { class: 'cell-clip' }, v);
       default: return el('span', {}, v);
     }
@@ -479,7 +521,7 @@
         el('h1', { class: 'page-title' }, settings.name ? `${settings.name}'s homepage` : 'Homepage')),
       el('div', { class: 'page-actions' },
         el('button', { class: 'btn primary', onclick: () => openRecord(byKey.deals, null, { stage: 'New lead', owner: settings.meId || undefined, follow_up: todayISO() }) }, icon('plus'), 'New deal'),
-        el('button', { class: 'btn', onclick: () => openRecord(projects, null, { assigned_to: settings.meId || undefined }) }, icon('plus'), 'New project'))
+        el('button', { class: 'btn', onclick: () => openRecord(projects, null, { assigned_to: settings.meId || undefined, status: 'Site survey' }) }, icon('plus'), 'New install'))
     );
 
     // ---- Sales: today's follow-ups, pipeline numbers, leaderboard ----
@@ -541,8 +583,8 @@
         el('span', {}, el('span', { class: 'tally-n', 'data-n': n }, String(n).padStart(2, '0')), el('div', { class: 'tally-label' }, String(q).replace(/\//g, '/\u200B'))));
     }));
     const queues = el('section', { class: 'card span-12 reveal' },
-      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Queues'),
-        el('span', { class: 'eyebrow', style: 'margin-left:auto' }, `${open.length} open projects`)),
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Install pipeline'),
+        el('span', { class: 'eyebrow', style: 'margin-left:auto' }, `${open.length} open installs`)),
       tally);
 
     // Directory search
@@ -571,21 +613,21 @@
         el('button', { class: 'btn', onclick: () => openRecord(byKey.notepad, null) }, icon('note'), 'New note'),
         el('button', { class: 'btn', onclick: () => openRecord(byKey.contacts, null) }, icon('contact'), 'New contact'),
         el('button', { class: 'btn', onclick: () => openRecord(byKey.calendar, null, { date: todayISO(), assigned_to: settings.meId || undefined }) }, icon('calendar'), 'New event'),
-        el('a', { class: 'btn', href: '#/t/scriptbuilders' }, icon('layers'), 'Scriptbuilders & blasts PDFs')));
+        el('a', { class: 'btn', href: '#/t/scriptbuilders' }, icon('layers'), 'Pitch & flyer PDFs')));
 
     // My projects
     const mine = me ? all.filter((r) => r.payload.assigned_to === me) : open;
-    const who = settings.name ? `${settings.name}'s projects` : 'Open projects';
+    const who = settings.name ? `${settings.name}'s installs` : 'Open installs';
     const projCard = el('section', { class: 'card span-12 reveal grid-card', style: 'padding:0' },
       el('div', { class: 'card-head', style: 'padding:18px 18px 4px' },
         el('h2', { class: 'card-title' }, who),
         el('span', { class: 'eyebrow' }, `${mine.length} ${mine.length === 1 ? 'record' : 'records'}`),
-        el('a', { class: 'btn ghost sm', href: '#/t/projects', style: 'margin-left:auto' }, 'All projects', icon('arrowR'))),
-      !me ? el('p', { class: 'hint', style: 'padding:0 18px' }, 'Showing every open project. Choose who you are in Settings to see only yours.') : null,
+        el('a', { class: 'btn ghost sm', href: '#/t/projects', style: 'margin-left:auto' }, 'All installs', icon('arrowR'))),
+      !me ? el('p', { class: 'hint', style: 'padding:0 18px' }, 'Showing every open install. Choose who you are in Settings to see only yours.') : null,
       mine.length ? gridTable(projects, sortRecords(projects, mine, projects.sort), projects.columns, () => render())
-        : emptyState('folder', 'No projects here yet', me ? 'Projects assigned to you will show up here.' : 'Create your first project to get the board moving.',
+        : emptyState('folder', 'No installs here yet', me ? 'Installs assigned to you will show up here.' : 'Sold deals become installs. Add your first one here.',
           el('div', { class: 'actions-row', style: 'justify-content:center' },
-            el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined }) }, icon('plus'), 'New project'),
+            el('button', { class: 'btn primary', onclick: () => openRecord(projects, null, { assigned_to: me || undefined, status: 'Site survey' }) }, icon('plus'), 'New install'),
             !all.length && !hasSample() ? el('button', { class: 'btn', onclick: (e) => runSample(e.currentTarget, true) }, 'Load sample data') : null)));
 
     return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), todayCard, board, queues, searches, actions, projCard);
@@ -785,7 +827,7 @@
   }
 
   // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
-  const OUTCOME_STAGE = { 'Demo set': 'Demo set', 'Proposal sent': 'Proposal sent', Sold: 'Won', 'Not interested': 'Lost' };
+  const OUTCOME_STAGE = { 'Appointment set': 'Appointment set', 'Proposal sent': 'Proposal sent', Sold: 'Won', 'Not interested': 'Lost' };
   function quickLog(spec, rec) {
     const type = el('select', { class: 'select', 'aria-label': 'Activity type' }, ACT_TYPES.map((t) => el('option', { value: t }, t)));
     const fu = el('input', { class: 'input', type: 'date', 'aria-label': 'Next follow-up', value: rec.payload.follow_up ? String(rec.payload.follow_up).slice(0, 10) : '' });
@@ -802,7 +844,7 @@
           settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}, note.value.trim() ? { notes: note.value.trim() } : {}) });
         const cur = STAGE_LIST.indexOf(p.stage || STAGE_LIST[0]);
         let to = OUTCOME_STAGE[outcome];
-        if (!to && cur === 0 && !['No answer', 'Left voicemail'].includes(outcome)) to = 'Contacted';
+        if (!to && cur === 0 && !['No answer', 'Left voicemail', 'Not home'].includes(outcome)) to = 'Contacted';
         if (to && to !== 'Lost' && to !== 'Won' && STAGE_LIST.indexOf(to) <= cur) to = null;
         if (DONE.has(p.stage)) to = null;
         const patch = {};
@@ -933,7 +975,7 @@
     await loadWithRefs(spec);
     const isNew = !rec;
     const values = Object.assign({}, rec ? rec.payload : {}, isNew ? defaults || {} : {});
-    const fields = Object.keys(schemaOf(spec));
+    const fields = Object.keys(schemaOf(spec)).filter((k) => !(spec.hide || []).includes(k) || (rec && rec.payload[k] != null && rec.payload[k] !== ''));
     const titleField = fields.find((c) => spec.title && spec.title({ [c]: 'x' }) === 'x') || fields[0];
 
     const errorBox = el('div', { class: 'form-error', role: 'alert', hidden: true });
@@ -1042,72 +1084,79 @@
     const q = settings.queues;
     const Q = (i) => q[i % q.length];
     return [
-      ['users', 'u1', { name: 'Avery Cole', role: 'Sales', email: 'avery@example.com', phone: '916-555-0101', active: true }],
-      ['users', 'u2', { name: 'Morgan Reyes', role: 'Sales', email: 'morgan@example.com', phone: '916-555-0102', active: true }],
-      ['users', 'u3', { name: 'Sam Patel', role: 'Production', email: 'sam@example.com', phone: '916-555-0103', active: true }],
+      ['users', 'u1', { name: 'Avery Cole', role: 'Closer', email: 'avery@example.com', phone: '916-555-0101', active: true }],
+      ['users', 'u2', { name: 'Morgan Reyes', role: 'Setter', email: 'morgan@example.com', phone: '916-555-0102', active: true }],
+      ['users', 'u3', { name: 'Sam Patel', role: 'Install coordinator', email: 'sam@example.com', phone: '916-555-0103', active: true }],
 
-      ['companies', 'c1', { company_name: 'Martinez Residence', status: 'Lead', phone: '916-555-0140', industry: 'Residential solar', notes: 'Sample homeowner. South-facing roof, wants a lower PG&E bill with no upfront cost.' }],
-      ['companies', 'c2', { company_name: 'Nguyen Residence', status: 'Active', phone: '916-555-0150', industry: 'Residential solar', notes: 'Sample homeowner. Asked about adding a battery for outages.' }],
-      ['companies', 'c3', { company_name: 'Hillcrest Family Dental', status: 'Lead', phone: '916-555-0160', website: 'https://example.com/hillcrest', industry: 'Commercial solar', notes: 'Sample business. Owns the building; flat roof.' }],
+      ['companies', 'c1', { company_name: 'Martinez Household', status: 'Lead', phone: '916-555-0140', utility: 'PG&E', avg_monthly_bill: 310, roof_type: 'Composition shingle', roof_age: 8, shade: 'None', hoa: false, notes: 'Sample homeowner. South-facing roof. Wants a lower bill with nothing out of pocket.' }],
+      ['companies', 'c2', { company_name: 'Nguyen Household', status: 'Lead', phone: '916-555-0150', utility: 'PG&E', avg_monthly_bill: 420, roof_type: 'Tile', roof_age: 12, shade: 'Some', hoa: true, notes: 'Sample homeowner. Asked about a battery for outages.' }],
+      ['companies', 'c3', { company_name: 'Carter Household', status: 'Lead', phone: '916-555-0160', utility: 'Roseville Electric', avg_monthly_bill: 260, roof_type: 'Composition shingle', roof_age: 4, shade: 'None', notes: 'Sample homeowner from a flyer scan.' }],
+      ['companies', 'c4', { company_name: 'Lopez Household', status: 'Lead', phone: '916-555-0170', utility: 'PG&E', avg_monthly_bill: 285, roof_type: 'Composition shingle', roof_age: 15, shade: 'Some', notes: 'Sample homeowner. Roof may need a check before install.' }],
+      ['companies', 'c5', { company_name: 'Patel Household', status: 'Customer', phone: '916-555-0180', utility: 'PG&E', avg_monthly_bill: 240, roof_type: 'Composition shingle', roof_age: 6, shade: 'None', notes: 'Sample customer. Signed this month.' }],
+      ['companies', 'c6', { company_name: 'Kim Household', status: 'Customer', phone: '916-555-0190', utility: 'SMUD', avg_monthly_bill: 220, roof_type: 'Metal', roof_age: 3, shade: 'None', notes: 'Sample customer. System on and producing.' }],
 
-      ['locations', 'l1', { location_name: 'Martinez — Roseville home', company: '@c1', address: '100 Sample St', city: 'Roseville', state: 'CA', zip: '95661' }],
-      ['locations', 'l2', { location_name: 'Nguyen — Rocklin home', company: '@c2', address: '200 Example Ave', city: 'Rocklin', state: 'CA', zip: '95677' }],
-      ['locations', 'l3', { location_name: 'Hillcrest — Auburn office', company: '@c3', address: '300 Placeholder Blvd', city: 'Auburn', state: 'CA', zip: '95603', phone: '916-555-0161' }],
-      ['locations', 'l4', { location_name: 'Nguyen — rental property', company: '@c2', address: '400 Demo Way', city: 'Lincoln', state: 'CA', zip: '95648' }],
+      ['locations', 'l1', { location_name: 'Martinez home', company: '@c1', address: '100 Sample St', city: 'Roseville', state: 'CA', zip: '95661' }],
+      ['locations', 'l2', { location_name: 'Nguyen home', company: '@c2', address: '200 Example Ave', city: 'Rocklin', state: 'CA', zip: '95677' }],
+      ['locations', 'l3', { location_name: 'Carter home', company: '@c3', address: '300 Placeholder Ct', city: 'Roseville', state: 'CA', zip: '95678' }],
+      ['locations', 'l4', { location_name: 'Lopez home', company: '@c4', address: '400 Demo Way', city: 'Lincoln', state: 'CA', zip: '95648' }],
+      ['locations', 'l5', { location_name: 'Patel home', company: '@c5', address: '500 Test Ln', city: 'Auburn', state: 'CA', zip: '95603' }],
+      ['locations', 'l6', { location_name: 'Kim home', company: '@c6', address: '600 Mock Dr', city: 'Citrus Heights', state: 'CA', zip: '95610' }],
 
-      ['contacts', 'p1', { first_name: 'Dana', last_name: 'Martinez', company: '@c1', location: '@l1', job_title: 'Homeowner', email: 'dana@example.com', phone: '916-555-0143' }],
-      ['contacts', 'p2', { first_name: 'Chris', last_name: 'Nguyen', company: '@c2', location: '@l2', job_title: 'Homeowner', email: 'chris@example.com', phone: '916-555-0152' }],
-      ['contacts', 'p3', { first_name: 'Riley', last_name: 'Shaw', company: '@c3', location: '@l3', job_title: 'Practice owner', email: 'riley@example.com', phone: '916-555-0162' }],
+      ['contacts', 'p1', { first_name: 'Dana', last_name: 'Martinez', company: '@c1', location: '@l1', job_title: 'Homeowner', decision_maker: true, email: 'dana@example.com', phone: '916-555-0141' }],
+      ['contacts', 'p2', { first_name: 'Luis', last_name: 'Martinez', company: '@c1', location: '@l1', job_title: 'Spouse', decision_maker: true, phone: '916-555-0142' }],
+      ['contacts', 'p3', { first_name: 'Chris', last_name: 'Nguyen', company: '@c2', location: '@l2', job_title: 'Homeowner', decision_maker: true, email: 'chris@example.com', phone: '916-555-0151' }],
+      ['contacts', 'p4', { first_name: 'Jamie', last_name: 'Carter', company: '@c3', location: '@l3', job_title: 'Homeowner', decision_maker: true, phone: '916-555-0161' }],
+      ['contacts', 'p5', { first_name: 'Rosa', last_name: 'Lopez', company: '@c4', location: '@l4', job_title: 'Homeowner', decision_maker: true, phone: '916-555-0171' }],
+      ['contacts', 'p6', { first_name: 'Raj', last_name: 'Patel', company: '@c5', location: '@l5', job_title: 'Homeowner', decision_maker: true, email: 'raj@example.com', phone: '916-555-0181' }],
 
-      ['vendors', 'v1', { vendor_name: 'Sample Panel Supply Co.', service: 'Panels & inverters', contact_name: 'Jordan Lee', email: 'supply@example.com', phone: '916-555-0170', website: 'https://example.com/supply' }],
+      ['vendors', 'v1', { vendor_name: 'Sample Install Crew LLC', service: 'Installation', contact_name: 'Jordan Lee', email: 'crew@example.com', phone: '916-555-0170' }],
       ['vendors', 'v2', { vendor_name: 'Placeholder Permit Services', service: 'Permitting', contact_name: 'Taylor Kim', email: 'permits@example.com', website: 'https://example.com/permits' }],
 
-      ['deals', 'd1', { deal_name: 'Martinez — 7.2 kW PPA', stage: 'Demo set', value: 24000, company: '@c1', contact: '@p1', owner: '@u2', source: 'Door knock', follow_up: day(0), next_step: 'Kitchen-table appointment, review 12 months of bills' }],
-      ['deals', 'd2', { deal_name: 'Nguyen — 9.6 kW + battery', stage: 'Proposal sent', value: 38000, company: '@c2', contact: '@p2', owner: '@u1', source: 'Referral', follow_up: day(-1), next_step: 'Call Chris about the battery option' }],
-      ['deals', 'd3', { deal_name: 'Hillcrest Dental — 40 kW rooftop', stage: 'Negotiation', value: 92000, company: '@c3', contact: '@p3', owner: '@u1', source: 'Cold call', follow_up: day(2), next_step: 'Confirm roof load with installer' }],
-      ['deals', 'd4', { deal_name: 'Carter home — bill review', stage: 'New lead', value: 21000, owner: '@u2', source: 'Flyer', follow_up: day(1), next_step: 'First call, ask for a recent bill' }],
-      ['deals', 'd5', { deal_name: 'Lopez home — roof check', stage: 'Contacted', value: 18000, owner: '@u2', source: 'Door knock', follow_up: day(-3), next_step: 'Both decision-makers home after 6pm' }],
-      ['deals', 'd6', { deal_name: 'Patel residence — 6.4 kW PPA', stage: 'Won', value: 22000, owner: '@u1', source: 'Referral', close_date: day(0) }],
-      ['deals', 'd7', { deal_name: 'Brooks home', stage: 'Lost', value: 19000, owner: '@u2', source: 'Door knock', close_date: day(-10), notes: 'Roof too shaded.' }],
+      ['deals', 'd1', { deal_name: 'Martinez — 7.2 kW', stage: 'Appointment set', value: 24000, system_size_kw: 7.2, financing: 'PPA', battery: false, company: '@c1', contact: '@p1', owner: '@u1', source: 'Door knock', follow_up: day(0), next_step: 'Kitchen-table appointment 6:30pm, both spouses home' }],
+      ['deals', 'd2', { deal_name: 'Nguyen — 9.6 kW + battery', stage: 'Proposal sent', value: 38000, system_size_kw: 9.6, financing: 'PPA', battery: true, company: '@c2', contact: '@p3', owner: '@u1', source: 'Referral', follow_up: day(-1), next_step: 'Answer battery questions, check HOA approval' }],
+      ['deals', 'd3', { deal_name: 'Carter — 6.0 kW', stage: 'New lead', value: 20000, system_size_kw: 6, financing: 'PPA', company: '@c3', contact: '@p4', owner: '@u2', source: 'Flyer', follow_up: day(1), next_step: 'First call, ask for a recent bill' }],
+      ['deals', 'd4', { deal_name: 'Lopez — 6.8 kW', stage: 'Contacted', value: 22000, system_size_kw: 6.8, financing: 'Loan', company: '@c4', contact: '@p5', owner: '@u2', source: 'Door knock', follow_up: day(-3), next_step: 'Come back after 6pm when both are home' }],
+      ['deals', 'd5', { deal_name: 'Okafor — 8.4 kW', stage: 'Negotiation', value: 29000, system_size_kw: 8.4, financing: 'Lease', owner: '@u1', source: 'Website', follow_up: day(2), next_step: 'Compare lease vs PPA side by side' }],
+      ['deals', 'd6', { deal_name: 'Patel — 6.4 kW', stage: 'Won', value: 22000, system_size_kw: 6.4, financing: 'PPA', company: '@c5', contact: '@p6', owner: '@u1', source: 'Referral', close_date: day(0) }],
+      ['deals', 'd7', { deal_name: 'Brooks — 5.6 kW', stage: 'Lost', value: 19000, system_size_kw: 5.6, financing: 'Cash', owner: '@u2', source: 'Door knock', close_date: day(-10), notes: 'Roof too shaded.' }],
 
-      ['activities', 'a1', { subject: 'Door knock — Demo set', type: 'Door knock', outcome: 'Demo set', deal: '@d1', company: '@c1', contact: '@p1', rep: '@u2', date: day(-2) }],
-      ['activities', 'a2', { subject: 'Door knock — Gatekeeper', type: 'Door knock', outcome: 'Gatekeeper', deal: '@d5', rep: '@u2', date: day(-1), notes: 'Spouse not home.' }],
-      ['activities', 'a3', { subject: 'Email — Proposal sent', type: 'Email', outcome: 'Proposal sent', deal: '@d2', company: '@c2', contact: '@p2', rep: '@u1', date: day(-3) }],
-      ['activities', 'a4', { subject: 'Call — No answer', type: 'Call', outcome: 'No answer', deal: '@d4', rep: '@u2', date: day(0) }],
-      ['activities', 'a5', { subject: 'Meeting — Sold', type: 'Meeting', outcome: 'Sold', deal: '@d6', rep: '@u1', date: day(0) }],
-      ['activities', 'a6', { subject: 'Meeting — Callback set', type: 'Meeting', outcome: 'Callback set', deal: '@d3', company: '@c3', contact: '@p3', rep: '@u1', date: day(-1) }],
+      ['activities', 'a1', { subject: 'Door knock — Appointment set', type: 'Door knock', outcome: 'Appointment set', deal: '@d1', company: '@c1', contact: '@p1', rep: '@u2', date: day(-2) }],
+      ['activities', 'a2', { subject: 'Door knock — Not home', type: 'Door knock', outcome: 'Not home', deal: '@d4', company: '@c4', rep: '@u2', date: day(-1), notes: 'Left a door hanger.' }],
+      ['activities', 'a3', { subject: 'Email — Proposal sent', type: 'Email', outcome: 'Proposal sent', deal: '@d2', company: '@c2', contact: '@p3', rep: '@u1', date: day(-3) }],
+      ['activities', 'a4', { subject: 'Call — No answer', type: 'Call', outcome: 'No answer', deal: '@d3', company: '@c3', rep: '@u2', date: day(0) }],
+      ['activities', 'a5', { subject: 'Appointment — Sold', type: 'Appointment', outcome: 'Sold', deal: '@d6', company: '@c5', contact: '@p6', rep: '@u1', date: day(0) }],
+      ['activities', 'a6', { subject: 'Follow-up visit — Callback set', type: 'Follow-up visit', outcome: 'Callback set', deal: '@d5', rep: '@u1', date: day(-1) }],
 
-      ['projects', 'j1', { project_title: 'Martinez — site survey', status: 'Intake', queue: Q(0), assigned_to: '@u3', company: '@c1', date_due: day(4) }],
-      ['projects', 'j2', { project_title: 'Nguyen — system design', status: 'Production', queue: Q(2), assigned_to: '@u3', company: '@c2', date_due: day(-2), url: 'https://example.com/designs/nguyen', url_details: 'Design draft' }],
-      ['projects', 'j3', { project_title: 'Nguyen — permit packet', status: 'Review', queue: Q(1), assigned_to: '@u3', company: '@c2', date_due: day(6) }],
-      ['projects', 'j4', { project_title: 'Hillcrest — roof load check', status: 'Intake', queue: Q(2), assigned_to: '@u1', company: '@c3', date_due: day(3) }],
-      ['projects', 'j5', { project_title: 'Hillcrest — utility interconnection', status: 'On hold', queue: Q(3), assigned_to: '@u3', company: '@c3', date_due: day(14) }],
-      ['projects', 'j6', { project_title: 'Martinez — financing paperwork', status: 'Intake', queue: Q(4), assigned_to: '@u2', company: '@c1', date_due: day(7) }],
-      ['projects', 'j7', { project_title: 'Nguyen — rental system activated', status: 'Delivered', queue: Q(2), assigned_to: '@u3', company: '@c2', date_due: day(-12) }],
+      ['projects', 'j1', { project_title: 'Patel — site survey', status: 'Site survey', queue: Q(0), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(3) }],
+      ['projects', 'j2', { project_title: 'Kim — final inspection', status: 'Inspection', queue: Q(2), assigned_to: '@u3', company: '@c6', project_type: 'Solar', date_due: day(-1) }],
+      ['projects', 'j3', { project_title: 'Kim — utility PTO', status: 'PTO', queue: Q(3), assigned_to: '@u3', company: '@c6', project_type: 'Solar', date_due: day(-12) }],
+      ['projects', 'j4', { project_title: 'Patel — system design', status: 'Design', queue: Q(1), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(7), url: 'https://example.com/designs/patel', url_details: 'Design draft' }],
+      ['projects', 'j5', { project_title: 'Patel — city permit', status: 'Permit', queue: Q(1), assigned_to: '@u3', company: '@c5', project_type: 'Solar', date_due: day(14), project_attachment: 'https://example.com/permits/patel' }],
+      ['projects', 'j6', { project_title: 'Kim — welcome call', status: 'Install', queue: Q(4), assigned_to: '@u1', company: '@c6', project_type: 'Solar', date_due: day(2) }],
 
-      ['indi_projects', 'i1', { project_title: 'Update door-knock talk track', status: 'Production', assigned_to: '@u2', date_due: day(6) }],
-      ['indi_projects', 'i2', { project_title: 'Plan Rocklin flyer route', status: 'Intake', assigned_to: '@u2', date_due: day(9) }],
+      ['indi_projects', 'i1', { project_title: 'Update door-knock talk track', status: 'Design', assigned_to: '@u2', date_due: day(6) }],
+      ['indi_projects', 'i2', { project_title: 'Plan Rocklin flyer route', status: 'Site survey', assigned_to: '@u2', date_due: day(9) }],
 
-      ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Homeowner sent the last 12 months of PG&E bills for the proposal.' }],
-      ['scripts_mail', 'm2', { subject: 'Battery questions — Nguyen', status: 'New', company: '@c2', contact: '@p2', received: day(-1), script: 'Wants to know how a battery works during an outage.' }],
+      ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Sent the last 12 months of PG&E bills for the proposal.' }],
+      ['scripts_mail', 'm2', { subject: 'Battery question — Nguyen', status: 'New', company: '@c2', contact: '@p3', received: day(-1), script: 'Wants to know how a battery works during an outage.' }],
 
       ['scripts_sent', 's1', { subject: 'Proposal — Nguyen 9.6 kW + battery', company: '@c2', sent_to: 'chris@example.com', date_sent: day(-3) }],
-      ['scripts_sent', 's2', { subject: 'Next steps — Hillcrest', company: '@c3', sent_to: 'riley@example.com', date_sent: day(-5) }],
+      ['scripts_sent', 's2', { subject: 'Welcome + next steps — Patel', company: '@c5', sent_to: 'raj@example.com', date_sent: day(0) }],
 
-      ['scriptbuilders', 'b1', { title: 'Residential door-knock pitch', kind: 'Scriptbuilder', pdf_link: 'https://example.com/pdfs/door-knock-pitch.pdf', date: day(-20) }],
-      ['scriptbuilders', 'b2', { title: 'Neighborhood flyer blast', kind: 'Blast', pdf_link: 'https://example.com/pdfs/flyer-blast.pdf', date: day(-4) }],
+      ['scriptbuilders', 'b1', { title: 'Residential door-knock pitch', kind: 'Pitch', pdf_link: 'https://example.com/pdfs/door-knock-pitch.pdf', date: day(-20) }],
+      ['scriptbuilders', 'b2', { title: 'Neighborhood flyer', kind: 'Flyer', pdf_link: 'https://example.com/pdfs/flyer.pdf', date: day(-4) }],
 
-      ['calendar', 'e1', { title: 'Appointment — Martinez', date: day(0), time: '6:30 PM', assigned_to: '@u2', company: '@c1' }],
-      ['calendar', 'e2', { title: 'Site survey — Martinez', date: day(4), time: '10:00 AM', assigned_to: '@u3', company: '@c1' }],
-      ['calendar', 'e3', { title: 'Roof walk — Hillcrest', date: day(3), time: '9:00 AM', assigned_to: '@u1', company: '@c3' }],
+      ['calendar', 'e1', { title: 'Appointment — Martinez', date: day(0), time: '6:30 PM', assigned_to: '@u1', company: '@c1' }],
+      ['calendar', 'e2', { title: 'Site survey — Patel', date: day(3), time: '10:00 AM', assigned_to: '@u3', company: '@c5' }],
+      ['calendar', 'e3', { title: 'Callback — Lopez', date: day(1), time: '6:15 PM', assigned_to: '@u2', company: '@c4' }],
       ['calendar', 'e4', { title: 'Team sales meeting', date: day(1), time: '8:30 AM' }],
 
       ['sales_events', 'x1', { event: 'Rocklin neighborhood blitz', date: day(5), status: 'Planned' }],
-      ['sales_events', 'x2', { event: 'Roseville home show booth', date: day(-6), status: 'Done' }],
+      ['sales_events', 'x2', { event: 'Roseville canvass — Diamond Oaks area', date: day(-6), status: 'Done', value: 120 }],
 
       ['notepad', 'n1', { title: 'Sample data', body: 'Everything you see right now is fictional placeholder data. Remove it in Settings → Sample data before importing real records.', pinned: true }],
       ['notepad', 'n2', { title: 'Appointment checklist', body: 'Get 12 months of utility bills\nCheck roof age and shade\nBoth decision-makers present\nWalk through the agreement terms' }],
-      ['notepad', 'n3', { title: 'Ideas', body: 'Ask every closed customer for two neighbor referrals.' }]
+      ['notepad', 'n3', { title: 'Ideas', body: 'Ask every new customer for two neighbor referrals.' }]
     ];
   }
 
@@ -1292,7 +1341,7 @@
         el('div', { class: 'wide field' }, el('span', {}, 'Sample data'),
           el('p', { class: 'hint', style: 'margin:0' }, hasSample()
             ? 'Fictional placeholder records are loaded. Remove them before importing real data. Records you added yourself stay.'
-            : 'Fill every tab with fictional solar customers, deals, installs, events and notes to try things out.'),
+            : 'Fill every tab with fictional homeowners, solar deals, installs, appointments and notes to try things out.'),
           el('div', { class: 'actions-row' }, hasSample()
             ? el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')
             : el('button', { class: 'btn', type: 'button', onclick: (e) => runSample(e.currentTarget, true) }, icon('plus'), 'Load sample data'))),
