@@ -189,7 +189,8 @@
       title: (p) => p.location_name, columns: ['location_name', 'company', 'address', 'city', 'zip'] },
     { key: 'contacts', table: 'Contacts', label: 'Contacts', single: 'contact', icon: 'contact', group: 'Directory',
       fields: [f('first_name', 'TEXT'), f('last_name', 'TEXT'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('location', 'REF:@locations', { label: 'Property' }),
-        f('job_title', 'TEXT', { label: 'Role' }), f('decision_maker', 'BOOLEAN', { label: 'Decision-maker' }), f('email', 'EMAIL'), f('phone', 'PHONE')],
+        f('job_title', 'TEXT', { label: 'Role' }), f('decision_maker', 'BOOLEAN', { label: 'Decision-maker' }), f('email', 'EMAIL'), f('phone', 'PHONE'),
+        f('text_consent', 'BOOLEAN', { label: 'OK to text (consent on file)' }), f('opted_out', 'BOOLEAN', { label: 'Opted out of follow-ups' })],
       title: (p) => full(p.first_name, p.last_name), columns: ['first_name', 'last_name', 'company', 'job_title', 'phone', 'email'] },
     { key: 'vendors', table: 'Vendors', label: 'Partners', single: 'partner', icon: 'truck', group: 'Directory',
       fields: [f('vendor_name', 'TEXT', { label: 'Partner' }), f('service', 'TEXT'), f('contact_name', 'TEXT'), f('email', 'EMAIL'), f('phone', 'PHONE'), f('website', 'URL'), f('notes', 'LONGTEXT')],
@@ -200,7 +201,9 @@
         f('financing', 'CHOICE:PPA|Lease|Loan|Cash'), f('battery', 'BOOLEAN', { label: 'Battery' }),
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'),
         f('owner', 'REF:@users', { label: 'Rep' }), f('source', 'CHOICE:Door knock|Cold call|Referral|Website|Event|Flyer|Existing customer|Other'),
-        f('follow_up', 'DATE'), f('next_step', 'TEXT'), f('close_date', 'DATE'), f('notes', 'LONGTEXT')],
+        f('follow_up', 'DATE'), f('next_step', 'TEXT'), f('close_date', 'DATE'), f('notes', 'LONGTEXT'),
+        f('seq_status', 'CHOICE:Active|Paused|Done|Opted out', { label: 'Auto follow-up' }), f('seq_start', 'DATE', { label: 'Auto follow-up started' }), f('seq_step', 'NUMBER', { label: 'Auto follow-ups sent' })],
+      hide: ['seq_step'],
       title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'system_size_kw', 'financing', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
     { key: 'activities', table: 'Activities', label: 'Activities', single: 'activity', icon: 'phone', group: 'Sales',
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
@@ -264,8 +267,8 @@
     { key: 'feed', table: 'Chatter', label: 'Chatter', single: 'post', icon: 'chat', group: 'Notes', view: 'feed',
       fields: [f('body', 'LONGTEXT', { label: 'Message' }), f('about', 'TEXT'), f('about_key', 'TEXT'), f('about_id', 'TEXT'),
         f('author', 'REF:@users', { label: 'From' }), f('notify', 'REF:@users', { label: 'For' }), f('seen', 'BOOLEAN'),
-        f('pinned', 'BOOLEAN', { label: 'Pinned for everyone' }), f('pinned_by', 'REF:@users', { label: 'Pinned by' })],
-      hide: ['about_key', 'about_id'],
+        f('pinned', 'BOOLEAN', { label: 'Pinned' }), f('pinned_by', 'REF:@users', { label: 'Pinned by' }), f('pin_audience', 'TEXT', { label: 'Pinned for' })],
+      hide: ['about_key', 'about_id', 'pin_audience'],
       title: (p) => p.about || 'Post', columns: ['about', 'body', 'author', 'notify', 'seen'] },
     { key: 'messages', table: 'Messages', label: 'Messages', single: 'message', icon: 'chat', group: 'Notes', view: 'chat',
       fields: [f('body', 'LONGTEXT', { label: 'Message' }), f('from_user', 'REF:@users', { label: 'From' }), f('to_user', 'REF:@users', { label: 'To' }),
@@ -564,6 +567,7 @@
       if (r.name !== 'new') node.append(pageFoot(r));
       view.replaceChildren(node);
       updateBell();
+      updateApBadge();
       updateChatBadge();
       stagger(view);
       countUp(view);
@@ -653,14 +657,14 @@
       el('span', { class: 'qart' }, el('span', { class: 'qglow' }), icon(ic), badge ? el('span', { class: 'qbadge' }, badge) : null),
       el('span', { class: 'qlabel' }, label), sub ? el('span', { class: 'qsub' }, sub) : null);
     const quick = el('section', { class: 'span-12 reveal quick', 'aria-label': 'Quick access' },
-      tile('userPlus', 215, 'New lead', 'Add a homeowner', newLead),
+      tile('userPlus', 215, 'Add lead', 'New homeowner', newLead),
       tile('door', 28, 'Log a knock', 'One tap', () => openRecord(byKey.activities, null, { type: 'Door knock', date: today, rep: me || undefined })),
       tile('bell', 350, 'Follow-ups', due.length ? `${due.length} due now` : 'All caught up', '#/t/deals?due=1', due.length || null),
       tile('target', 255, 'Pipeline', money(sumVal(myOpen)) + ' open', '#/t/deals'),
       tile('calendar', 190, 'Calendar', apptsToday ? `${apptsToday} appt${apptsToday === 1 ? '' : 's'} today` : 'Appointments', '#/t/calendar', apptsToday || null),
       tile('home', 160, 'Homeowners', `${(cache.companies || []).length} on file`, '#/t/companies'),
       tile('sun', 42, 'Projects', `${open.filter((r) => r.payload.status !== 'Paused').length} active`, '#/t/projects'),
-      tile('layers', 290, 'Pitch & flyers', 'PDFs', '#/t/scriptbuilders'));
+      Object.assign(tile('send', 320, 'Autopilot', 'Auto follow-ups', openAutopilot), { id: 'apTile' }));
 
     // ---- Customer journey: one path from first knock to PTO ----
     const salesSteps = STAGE_LIST.filter((x) => x !== 'Lost');
@@ -710,9 +714,9 @@
 
     searches.classList.replace('span-8', 'span-12');
     // ---- Pinned for the team: every note anyone pinned ----
-    const pinnedPosts = (cache.feed || []).filter((x) => x.payload.pinned).sort(byPinned);
+    const pinnedPosts = (cache.feed || []).filter(canSeePin).sort(byPinned);
     const pinsCard = pinnedPosts.length ? el('section', { class: 'card span-12 reveal pinned-card' },
-      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for the team'), el('span', { class: 'kcount' }, pinnedPosts.length),
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for you'), el('span', { class: 'kcount' }, pinnedPosts.length),
         el('a', { class: 'btn ghost sm', href: '#/t/feed', style: 'margin-left:auto' }, 'All Chatter', icon('arrowR'))),
       el('div', { class: 'posts pins-grid' }, pinnedPosts.slice(0, 6).map((x) => postView(x, true, () => render())))) : null;
     return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), pinsCard, quick, journey, todayCard, board, searches);
@@ -752,8 +756,8 @@
   }
 
   async function renderTableView(spec, params) {
-    await loadWithRefs(spec);
-    const st = ui[spec.key] || (ui[spec.key] = { q: '', chip: '', sort: spec.sort || null, mode: spec.view === 'calendar' ? 'calendar' : spec.view === 'board' ? 'board' : 'list', month: null });
+    await Promise.all([loadWithRefs(spec), byKey.locations ? load(byKey.locations) : null]);
+    const st = ui[spec.key] || (ui[spec.key] = { q: '', chip: '', sort: null, sortBy: spec.sort ? 'date' : 'newest', mode: spec.view === 'calendar' ? 'calendar' : spec.view === 'board' ? 'board' : 'list', month: null });
     const label = labelOf(spec);
     setCrumbs(settings.workspace || 'Workspace', label);
     const recs = cache[spec.key];
@@ -775,9 +779,9 @@
         spec.view === 'board' ? el('div', { class: 'chips', role: 'group', 'aria-label': 'View' },
           el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'board'), onclick: () => { st.mode = 'board'; render(); } }, 'Pipeline'),
           el('button', { class: 'chip', 'aria-pressed': String(st.mode === 'list'), onclick: () => { st.mode = 'list'; render(); } }, 'List')) : null,
-        el('button', { class: 'btn primary', onclick: () => openRecord(spec, null, newDefaults()) }, icon('plus'), `New ${spec.single}`)));
+        ['feed', 'chat'].includes(spec.view) ? null : el('button', { class: 'btn primary', onclick: () => openRecord(spec, null, newDefaults()) }, icon('plus'), `New ${spec.single}`)));
 
-    if (!recs.length) {
+    if (!recs.length && spec.view !== 'feed') {
       return el('div', {}, head, el('div', { class: 'card reveal' },
         emptyState(spec.icon, `No ${spec.label.toLowerCase()} yet`, `Add your first ${spec.single} and it shows up here.`,
           el('div', { class: 'actions-row', style: 'justify-content:center' },
@@ -808,6 +812,7 @@
     }
     const toolbar = el('div', { class: 'toolbar reveal' },
       el('div', { class: 'search' }, icon('search'), searchInput),
+      sortSelect(spec, st, 'newest', () => { st.sort = null; draw(); }),
       queue ? el('button', { class: 'chip', 'aria-pressed': 'true', onclick: () => go('#/t/' + spec.key), title: 'Clear queue filter' }, `Queue: ${queue}  ×`) : null,
       chips);
 
@@ -817,7 +822,7 @@
       let rows = base;
       if (st.chip && chipField) rows = rows.filter((r) => r.payload[chipField] === st.chip);
       if (q) rows = rows.filter((r) => searchText(spec, r).includes(q));
-      rows = sortRecords(spec, rows, st.sort);
+      rows = st.sort ? sortRecords(spec, rows, st.sort) : applySort(spec, rows, st.sortBy || 'newest');
       const onSort = (c) => { st.sort = st.sort && st.sort.field === c ? { field: c, dir: -st.sort.dir } : { field: c, dir: 1 }; draw(); };
       body.replaceChildren(
         rows.length ? gridTable(spec, rows, spec.columns, onSort, st.sort || { field: '' }, !drawn)
@@ -834,6 +839,56 @@
     return el('div', {}, head, toolbar, body);
   }
 
+  // ---------------------------------------------------------------------
+  // Sort by: date, address, system size, team member, value, name, newest/oldest
+  // ---------------------------------------------------------------------
+  let addrIndex = null;
+  function addressIndex() {
+    if (addrIndex && addrIndex.n === (cache.locations || []).length) return addrIndex.map;
+    const map = new Map();
+    (cache.locations || []).forEach((l) => { const c = l.payload.company; if (c && !map.has(c)) map.set(c, [l.payload.address, l.payload.city].filter(Boolean).join(', ')); });
+    addrIndex = { n: (cache.locations || []).length, map };
+    return map;
+  }
+  function addressOf(spec, r) {
+    const p = r.payload;
+    if (p.address) return [p.address, p.city].filter(Boolean).join(', ');
+    if (spec.key === 'companies') return addressIndex().get(r.id) || '';
+    if (p.location) { const l = (cache.locations || []).find((x) => x.id === p.location); if (l) return [l.payload.address, l.payload.city].filter(Boolean).join(', '); }
+    return p.company ? addressIndex().get(p.company) || '' : '';
+  }
+  function sortChoices(spec) {
+    const sch = schemaOf(spec);
+    const out = [{ id: 'newest', label: 'Newest first', v: (r) => r.date_created, dir: -1 }, { id: 'oldest', label: 'Oldest first', v: (r) => r.date_created, dir: 1 }];
+    const dateField = (spec.card && spec.card.due) || ['follow_up', 'date_due', 'date', 'close_date', 'received', 'date_sent'].find((k) => k in sch);
+    if (dateField) out.push({ id: 'date', label: `Date (${fieldLabel(spec, dateField).replace(/\s*\(.*\)/, '')})`, v: (r) => r.payload[dateField] || null, dir: 1 });
+    if (['address', 'company', 'location'].some((k) => k in sch) || spec.key === 'companies') out.push({ id: 'address', label: 'Address', v: (r) => addressOf(spec, r).replace(/^\d+\s+/, '').toLowerCase() || null, dir: 1 });
+    if ('system_size_kw' in sch) out.push({ id: 'size', label: 'System size (largest)', v: (r) => (r.payload.system_size_kw == null ? null : Number(r.payload.system_size_kw)), dir: -1 });
+    const member = ['owner', 'assigned_to', 'rep', 'author', 'from_user'].find((k) => k in sch);
+    if (member) out.push({ id: 'member', label: 'Team member', v: (r) => (r.payload[member] ? refLabel(typeOf(spec, member).target, r.payload[member]).toLowerCase() : null), dir: 1 });
+    const money = ['value', 'contract_value', 'avg_monthly_bill'].find((k) => k in sch);
+    if (money) out.push({ id: 'value', label: `${fieldLabel(spec, money).replace(/\s*\(.*\)/, '')} (highest)`, v: (r) => (r.payload[money] == null ? null : Number(r.payload[money])), dir: -1 });
+    out.push({ id: 'name', label: 'Name A–Z', v: (r) => titleOf(spec, r).toLowerCase(), dir: 1 });
+    return out;
+  }
+  function applySort(spec, recs, id) {
+    const c = sortChoices(spec).find((x) => x.id === id);
+    if (!c) return recs;
+    return recs.slice().sort((a, b) => {
+      const x = c.v(a), y = c.v(b);
+      if (x === y) return 0;
+      if (x === null || x === undefined || x === '') return 1;
+      if (y === null || y === undefined || y === '') return -1;
+      return (x < y ? -1 : 1) * c.dir;
+    });
+  }
+  function sortSelect(spec, st, def, onChange) {
+    const sel = el('select', { class: 'select sort-sel', 'aria-label': 'Sort by' },
+      sortChoices(spec).map((c) => el('option', { value: c.id, selected: (st.sortBy || def) === c.id }, c.label)));
+    sel.addEventListener('change', () => { st.sortBy = sel.value; onChange(); });
+    return el('label', { class: 'sort-wrap' }, icon('sliders'), el('span', {}, 'Sort'), sel);
+  }
+
   // Pipeline board (Salesforce-style kanban). Drag cards on desktop; tap the arrow to advance on a phone.
   // Works for Deals (sales stages) and Installs (install steps).
   function renderBoard(spec, recs, field, st, params = {}) {
@@ -846,8 +901,12 @@
     const word = spec.label.toLowerCase();
     const search = el('input', { class: 'input', type: 'search', placeholder: `Search ${word}`, value: st.q || '', 'aria-label': `Search ${word}` });
     search.addEventListener('input', () => { st.q = search.value; fill(); });
+    const focus = params.stage && stages.includes(params.stage) ? params.stage : null;
+    const defSort = c.due ? 'date' : 'newest';
     const toolbar = el('div', { class: 'toolbar' },
       el('div', { class: 'search' }, icon('search'), search),
+      sortSelect(spec, st, defSort, () => fill()),
+      focus ? el('a', { class: 'chip', 'aria-pressed': 'true', href: '#/t/' + spec.key, title: 'Show every stage' }, `Showing: ${focus}  ×`) : null,
       dueOnly ? el('a', { class: 'chip', 'aria-pressed': 'true', href: '#/t/' + spec.key, title: 'Show all' }, 'Due today or overdue  ×') : null,
       settings.meId && c.owner ? el('div', { class: 'chips' },
         el('button', { class: 'chip', 'aria-pressed': String(!mineOnly), onclick: () => { st.mine = false; render(); } }, 'Everyone'),
@@ -865,8 +924,10 @@
     function fill() {
       const rows = visible();
       wrap.replaceChildren();
+      wrap.classList.toggle('focus', !!focus);
       stages.forEach((stage, idx) => {
-        const items = sortRecords(spec, rows.filter((r) => inStage(r, stage)), c.due ? { field: c.due, dir: 1 } : null);
+        if (focus && stage !== focus) return;
+        const items = applySort(spec, rows.filter((r) => inStage(r, stage)), st.sortBy || defSort);
         const total = c.value ? items.reduce((a, r) => a + (Number(r.payload[c.value]) || 0), 0) : null;
         const nx = stages[idx + 1];
         const next = !DONE.has(stage) && !terminal.has(stage) && nx && !terminal.has(nx) ? nx : null;
@@ -910,12 +971,15 @@
       const col = wrap.querySelector(`.kcol[data-stage="${CSS.escape(stage)}"]`);
       if (col) wrap.scrollTo({ left: col.offsetLeft - wrap.offsetLeft - 16, behavior: smooth && !reduceMotion() ? 'smooth' : 'auto' });
     };
-    const jump = el('div', { class: 'board-jump', role: 'group', 'aria-label': 'Jump to stage' }, stages.map((stage, i) => {
-      const n = visible().filter((r) => inStage(r, stage)).length;
-      return el('button', { class: 'chip', type: 'button', style: `--h:${hue(stage)}`, onclick: () => jumpTo(stage, true) },
-        el('span', { class: 'kdot' }), stage, el('span', { class: 'n' }, n));
-    }));
-    if (params.stage) requestAnimationFrame(() => requestAnimationFrame(() => jumpTo(params.stage, false)));
+    // Stage chips: open just that stage (tap again / ×  to see every stage)
+    const jump = el('div', { class: 'board-jump', role: 'group', 'aria-label': 'Show one stage' },
+      el('a', { class: 'chip', href: '#/t/' + spec.key, 'aria-pressed': String(!focus) }, 'All stages'),
+      stages.map((stage) => {
+        const n = visible().filter((r) => inStage(r, stage)).length;
+        return el('a', { class: 'chip', href: focus === stage ? '#/t/' + spec.key : `#/t/${spec.key}?stage=${encodeURIComponent(stage)}`, 'aria-pressed': String(focus === stage), style: `--h:${hue(stage)}` },
+          el('span', { class: 'kdot' }), stage, el('span', { class: 'n' }, n));
+      }));
+    void jumpTo;
     return el('div', {}, toolbar, jump, wrap);
   }
   const initials = (name) => String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
@@ -923,6 +987,11 @@
   async function moveStage(spec, rec, field, stage) {
     const patch = { [field]: stage };
     if ((stage === 'Sold' || stage === 'Lost') && 'close_date' in schemaOf(spec) && !rec.payload.close_date) patch.close_date = todayISO();
+    if (spec.key === 'deals') {
+      const cfg = apCfg();
+      if (DONE.has(stage)) patch.seq_status = 'Done';
+      else if (cfg.stages.includes(stage) && !rec.payload.seq_start) Object.assign(patch, { seq_start: todayISO(), seq_status: 'Active', seq_step: 0 });
+    }
     const stamp = spec.key === 'projects' && STEP_DATE[stage];
     if (stamp && stamp in schemaOf(spec) && !rec.payload[stamp]) patch[stamp] = todayISO();
     try {
@@ -978,7 +1047,7 @@
     if (settings.meId) payload.author = settings.meId;
     if (notify && notify !== settings.meId) payload.notify = notify;
     if (auto && !payload.notify) return null; // automatic posts only when someone needs to act
-    if (extra && extra.pinned) { payload.pinned = true; if (settings.meId) payload.pinned_by = settings.meId; }
+    if (extra && extra.pinned) { payload.pinned = true; payload.pin_audience = extra.pinned === true ? 'all' : extra.pinned; if (settings.meId) payload.pinned_by = settings.meId; }
     try { const r = await api('POST', '/api/vault/insert-record', { registry_id: F.reg.id, payload }); delete cache.feed; return r.record; } catch (_) { return null; }
   }
   function shareLinks(post) {
@@ -995,34 +1064,84 @@
     const from = userName(p.author) || 'Someone';
     const when = new Date(post.date_created);
     const pinBtn = el('button', { class: 'post-pin' + (p.pinned ? ' on' : ''), type: 'button', 'aria-pressed': String(!!p.pinned),
-      'aria-label': p.pinned ? 'Unpin for everyone' : 'Pin for everyone', title: p.pinned ? 'Unpin for everyone' : 'Pin for everyone',
-      onclick: async (e) => { e.stopPropagation(); await togglePin(post); if (onChange) onChange(); else { const v = postView(post, showAbout, onChange); node.replaceWith(v); } } }, icon('pin'));
+      'aria-label': p.pinned ? 'Unpin' : 'Pin this note', title: p.pinned ? 'Unpin' : 'Pin this note',
+      onclick: async (e) => {
+        e.stopPropagation();
+        const refresh = () => { if (onChange) onChange(); else { const v = postView(post, showAbout, onChange); node.replaceWith(v); } };
+        if (p.pinned) { await togglePin(post, null); refresh(); return; }
+        const open = node.querySelector('.post-pinpick');
+        if (open) { open.remove(); return; }
+        const pick = pinSwitch('pp_' + post.id, true);
+        const box = el('div', { class: 'post-pinpick', onclick: (ev) => ev.stopPropagation() }, pick.row,
+          el('div', { class: 'actions-row' }, el('button', { class: 'btn ghost sm', type: 'button', onclick: () => box.remove() }, 'Cancel'),
+            el('button', { class: 'btn primary sm', type: 'button', onclick: async () => { const a = pick.value(); if (!a) { toast('Pick at least one person', true); return; } await togglePin(post, a); refresh(); } }, icon('pin'), 'Pin')));
+        node.querySelector('.post-main').append(box);
+      } }, icon('pin'));
     const node = el('article', { class: 'post' + (p.notify === settings.meId && !p.seen ? ' unread' : '') + (p.pinned ? ' pinned' : '') },
+      pinBtn,
       el('span', { class: 'post-av' }, initials(from)),
       el('div', { class: 'post-main' },
-        p.pinned ? el('div', { class: 'post-pinned' }, icon('pin'), 'Pinned for everyone' + (p.pinned_by && userName(p.pinned_by) ? ` by ${userName(p.pinned_by)}` : '')) : null,
+        p.pinned ? el('div', { class: 'post-pinned' }, icon('pin'), `Pinned for ${audienceLabel(p.pin_audience)}` + (p.pinned_by && userName(p.pinned_by) ? ` by ${userName(p.pinned_by)}` : '')) : null,
         el('div', { class: 'post-meta' }, el('b', {}, from),
           p.notify ? el('span', { class: 'post-for' }, icon('arrowR'), userName(p.notify) || 'Teammate') : null,
-          el('time', { datetime: post.date_created, title: when.toLocaleString() }, fmtWhen(when)), pinBtn),
+          el('time', { datetime: post.date_created, title: when.toLocaleString() }, fmtWhen(when))),
         showAbout ? (p.about_key ? el('a', { class: 'post-about', href: `#/t/${p.about_key}?open=${p.about_id}`, onclick: () => markSeen(post) }, p.about) : el('span', { class: 'post-about team' }, icon('users'), p.about || 'Team')) : null,
         el('p', { class: 'post-body' }, p.body),
         p.notify && p.notify !== settings.meId ? shareLinks(post) : null));
     return node;
   }
-  async function togglePin(post) {
-    const on = !post.payload.pinned;
-    const patch = { pinned: on, pinned_by: on && settings.meId ? settings.meId : null };
+  async function togglePin(post, audience) {
+    const on = !!audience;
+    const patch = { pinned: on, pinned_by: on && settings.meId ? settings.meId : null, pin_audience: on ? audience : null };
     try {
       await api('POST', '/api/vault/update-record', { registry_id: byKey.feed.reg.id, record_id: post.id, payload: patch });
       post.payload.pinned = on;
+      if (on) post.payload.pin_audience = audience; else delete post.payload.pin_audience;
       if (on && settings.meId) post.payload.pinned_by = settings.meId; else delete post.payload.pinned_by;
-      toast(on ? 'Pinned for everyone' : 'Unpinned');
+      toast(on ? `Pinned for ${audienceLabel(audience)}` : 'Unpinned');
     } catch (e) { toast(e.message, true); }
   }
-  const byPinned = (a, b) => (!!b.payload.pinned - !!a.payload.pinned) || (a.date_created < b.date_created ? 1 : -1);
-  function pinSwitch(id) {
-    const box = el('input', { type: 'checkbox', id });
-    return { box, row: el('label', { class: 'pin-switch', for: id }, el('span', { class: 'toggle' }, box, el('i')), icon('pin'), 'Pin for everyone') };
+  const byPinned = (a, b) => (canSeePin(b) - canSeePin(a)) || (a.date_created < b.date_created ? 1 : -1);
+  // Pin audience: 'all' | 'team:<role>' | 'users:<id>,<id>'
+  const TEAM_NAMES = { Admin: 'Admins', Setter: 'Setters', Closer: 'Closers', 'Install coordinator': 'Install coordinators', Support: 'Support' };
+  const teamLabel = (r) => TEAM_NAMES[r] || `${r}s`;
+  function audienceLabel(a) {
+    if (!a || a === 'all') return 'everyone';
+    if (a.startsWith('team:')) return teamLabel(a.slice(5));
+    const names = a.slice(6).split(',').map((id) => (userName(id) || 'Teammate').split(' ')[0]);
+    return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', ');
+  }
+  function canSeePin(post) {
+    const p = post.payload;
+    if (!p.pinned) return false;
+    const a = p.pin_audience || 'all';
+    if (a === 'all') return true;
+    const me = settings.meId;
+    if (!me) return false;
+    if (p.author === me || p.pinned_by === me) return true;
+    const u = userRec(me);
+    if (u && u.payload.role === 'Admin') return true;
+    if (a.startsWith('team:')) return !!u && u.payload.role === a.slice(5);
+    return a.slice(6).split(',').includes(me);
+  }
+  // Pin picker: Don't pin / Everyone / a team / specific people
+  function pinSwitch(id, startOn) {
+    const users = (cache.users || []).filter((u) => u.payload.active !== false);
+    const roles = [...new Set(users.map((u) => u.payload.role).filter(Boolean))];
+    const sel = el('select', { class: 'select', id, 'aria-label': 'Pin for' },
+      startOn ? null : el('option', { value: '' }, 'Don’t pin'),
+      el('option', { value: 'all' }, 'Everyone'),
+      roles.length ? el('optgroup', { label: 'A team' }, roles.map((r) => el('option', { value: 'team:' + r }, teamLabel(r)))) : null,
+      el('option', { value: 'users' }, 'Specific people…'));
+    const people = el('div', { class: 'pin-people', hidden: true }, users.map((u) => el('label', {}, el('input', { type: 'checkbox', value: u.id }), u.payload.name || 'Teammate')));
+    sel.addEventListener('change', () => { people.hidden = sel.value !== 'users'; });
+    const value = () => {
+      if (sel.value !== 'users') return sel.value || null;
+      const ids = [...people.querySelectorAll('input:checked')].map((x) => x.value);
+      return ids.length ? 'users:' + ids.join(',') : null;
+    };
+    const reset = () => { sel.value = startOn ? 'all' : ''; people.hidden = true; people.querySelectorAll('input').forEach((x) => { x.checked = false; }); };
+    return { value, reset, row: el('div', { class: 'pin-for' }, icon('pin'), el('span', {}, 'Pin for'), sel, people) };
   }
   function fmtWhen(d) {
     const mins = Math.round((Date.now() - d.getTime()) / 60000);
@@ -1046,21 +1165,22 @@
     const who = el('select', { class: 'select', 'aria-label': 'Notify' }, el('option', { value: '' }, 'No one'),
       users.map((u) => el('option', { value: u.id, selected: u.id === respOf(rec.payload) }, u.payload.name || 'Teammate')));
     const list = el('div', { class: 'posts' });
-    const redraw = () => { posts.sort(byPinned); list.replaceChildren(...(posts.length ? posts.slice(0, 30).map((x) => postView(x, false, redraw)) : [el('p', { class: 'hint', style: 'margin:0' }, 'No notes yet. Post one to loop in the team.')])); };
+    const countEl = el('span', {}, posts.length);
+    const redraw = () => { countEl.textContent = posts.length; posts.sort(byPinned); list.replaceChildren(...(posts.length ? posts.slice(0, 30).map((x) => postView(x, false, redraw)) : [el('p', { class: 'hint', style: 'margin:0' }, 'No notes yet. Post one to loop in the team.')])); };
     redraw();
     const btn = el('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
       if (!text.value.trim()) { text.focus(); return; }
       btn.disabled = true;
-      const made = await postChatter(spec, rec, text.value, who.value || null, false, { pinned: pinner.box.checked });
+      const made = await postChatter(spec, rec, text.value, who.value || null, false, { pinned: pinner.value() });
       btn.disabled = false;
       if (!made) { toast('Couldn’t post that note', true); return; }
-      text.value = ''; pinner.box.checked = false;
+      text.value = ''; pinner.reset();
       posts.push(made); redraw();
-      toast((made.payload.pinned ? 'Pinned for everyone' : 'Posted') + (made.payload.notify ? ` · ${userName(made.payload.notify)} notified` : ''));
+      toast((made.payload.pinned ? `Pinned for ${audienceLabel(made.payload.pin_audience)}` : 'Posted') + (made.payload.notify ? ` · ${userName(made.payload.notify)} notified` : ''));
       updateBell();
     } }, icon('send'), 'Post');
     return el('div', { class: 'chatter wide' },
-      el('h3', {}, icon('chat'), 'Chatter', el('span', {}, posts.length)),
+      el('h3', {}, icon('chat'), 'Chatter', countEl),
       text,
       el('div', { class: 'chatter-row' }, el('label', { class: 'ql-fu' }, el('span', {}, 'Notify'), who), btn),
       pinner.row,
@@ -1100,10 +1220,10 @@
     const all = recs.slice();
     const pinnedBox = el('div', { class: 'posts' });
     const restBox = el('div', { class: 'posts' });
-    const pinnedCard = el('section', { class: 'card reveal pinned-card' }, el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for the team')), pinnedBox);
+    const pinnedCard = el('section', { class: 'card reveal pinned-card' }, el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for you')), pinnedBox);
     const draw = () => {
-      const pins = all.filter((x) => x.payload.pinned).sort(byPinned);
-      const rest = all.filter((x) => !x.payload.pinned).sort(byPinned);
+      const pins = all.filter(canSeePin).sort(byPinned);
+      const rest = all.filter((x) => !canSeePin(x)).sort(byPinned);
       pinnedCard.hidden = !pins.length;
       pinnedBox.replaceChildren(...pins.map((x) => postView(x, true, draw)));
       restBox.replaceChildren(...(rest.length ? rest.slice(0, 200).map((x) => postView(x, true, draw)) : [el('p', { class: 'hint' }, 'No notes yet.')]));
@@ -1117,12 +1237,13 @@
       btn.disabled = true;
       const payload = { body: body.slice(0, 9000), about: 'Team update', seen: true };
       if (settings.meId) payload.author = settings.meId;
-      if (pinner.box.checked) { payload.pinned = true; if (settings.meId) payload.pinned_by = settings.meId; }
+      const aud = pinner.value();
+      if (aud) { payload.pinned = true; payload.pin_audience = aud; if (settings.meId) payload.pinned_by = settings.meId; }
       try {
         const r = await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload });
         all.push(r.record); delete cache.feed;
-        text.value = ''; pinner.box.checked = false; draw();
-        toast(payload.pinned ? 'Pinned for everyone' : 'Posted');
+        text.value = ''; pinner.reset(); draw();
+        toast(payload.pinned ? `Pinned for ${audienceLabel(payload.pin_audience)}` : 'Posted');
       } catch (e) { toast(e.message, true); }
       btn.disabled = false;
     } }, icon('send'), 'Post');
@@ -1306,6 +1427,216 @@
   }
 
   // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
+  // ---------------------------------------------------------------------
+  // Follow-up autopilot: day 7 / 15 / 30 text + email sequence per open deal
+  // The schedule, contact lookup and messages are automatic. Sending happens from the
+  // rep's phone (one tap) until a server + texting/email accounts are connected.
+  // ---------------------------------------------------------------------
+  const AP_DEFAULT = {
+    on: true, days: [7, 15, 30], stages: ['Follow-up', 'Appointment set', 'Proposal sent'],
+    steps: [
+      { sms: 'Hi {first_name}, it’s {rep_first} with {company}. Just checking in on your solar proposal. Any questions I can answer? Reply STOP to opt out.',
+        subject: 'Checking in on your solar proposal', email: 'Hi {first_name},\n\nJust checking in on the solar proposal for your home. Happy to answer any questions or walk through the numbers again.\n\n{rep_name}\n{company}\n{rep_phone}\n\nIf you’d rather not hear from us, just reply and let me know.' },
+      { sms: 'Hi {first_name}, {rep_first} here from {company}. Want me to walk through your numbers again? Reply here or call me anytime. Reply STOP to opt out.',
+        subject: 'Your solar numbers', email: 'Hi {first_name},\n\nI’d be glad to go over your proposal again, answer questions, or adjust anything that doesn’t fit. What day works for a quick call?\n\n{rep_name}\n{company}\n{rep_phone}\n\nIf you’d rather not hear from us, just reply and let me know.' },
+      { sms: 'Hi {first_name}, it’s {rep_first} with {company}. Wanted to make sure you have everything you need about going solar. Still interested? Reply STOP to opt out.',
+        subject: 'Still thinking about solar?', email: 'Hi {first_name},\n\nI don’t want to keep filling your inbox, so this is my last check-in for now. If going solar is still on your mind, reply and I’ll pick it right back up.\n\n{rep_name}\n{company}\n{rep_phone}' }
+    ]
+  };
+  const apCfg = () => {
+    const c = Object.assign({}, AP_DEFAULT, settings.autopilot || {});
+    c.days = (Array.isArray(c.days) && c.days.length === 3 ? c.days : AP_DEFAULT.days).map((d, i) => Math.max(1, Number(d) || AP_DEFAULT.days[i]));
+    c.steps = AP_DEFAULT.steps.map((d, i) => Object.assign({}, d, (c.steps || [])[i] || {}));
+    return c;
+  };
+  const addDays = (iso, n) => { const [y, m, d] = String(iso).slice(0, 10).split('-').map(Number); const x = new Date(y, m - 1, d + n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  const daysBetween = (a, b) => Math.round((new Date(b + 'T12:00') - new Date(a + 'T12:00')) / 86400000);
+  function apContact(deal) {
+    const p = deal.payload;
+    const c = p.contact && (cache.contacts || []).find((r) => r.id === p.contact);
+    const h = p.company && (cache.companies || []).find((r) => r.id === p.company);
+    const household = h ? String(h.payload.company_name || '').replace(/\s+Household$/i, '') : '';
+    const first = (c && c.payload.first_name) || household.split(' ')[0] || 'there';
+    return {
+      first, last: (c && c.payload.last_name) || household.split(' ').slice(1).join(' '),
+      phone: (c && c.payload.phone) || (h && h.payload.phone) || '',
+      email: (c && c.payload.email) || '',
+      consent: !!(c && c.payload.text_consent), optedOut: !!(c && c.payload.opted_out)
+    };
+  }
+  function apPlan(deal, cfg = apCfg()) {
+    const p = deal.payload;
+    const start = String(p.seq_start || deal.date_created || todayISO()).slice(0, 10);
+    const sent = Math.max(0, Math.min(3, Number(p.seq_step) || 0));
+    const dates = cfg.days.map((d) => addDays(start, d));
+    const eligible = cfg.on && !DONE.has(p.stage) && cfg.stages.includes(p.stage) && !['Paused', 'Done', 'Opted out'].includes(p.seq_status);
+    return { start, sent, dates, eligible, next: sent < 3 ? sent : -1, dueOn: sent < 3 ? dates[sent] : null };
+  }
+  function apFill(tpl, deal, who) {
+    const p = deal.payload;
+    const rep = userRec(p.owner) || userRec(settings.meId);
+    const repName = rep ? rep.payload.name || '' : (settings.name || '');
+    const company = settings.workspace && !/^(test )?workspace$/i.test(settings.workspace) ? settings.workspace : 'our team';
+    const map = { first_name: who.first, last_name: who.last, rep_name: repName, rep_first: repName.split(' ')[0] || 'your rep', rep_phone: rep ? rep.payload.phone || '' : '', company, kw: p.system_size_kw ? `${p.system_size_kw} kW` : '' };
+    return String(tpl).replace(/\{(\w+)\}/g, (m, k) => (k in map ? map[k] : m)).replace(/\n{3,}/g, '\n\n').trim();
+  }
+  function apDue() {
+    const cfg = apCfg();
+    const today = todayISO();
+    return (cache.deals || []).map((d) => ({ d, plan: apPlan(d, cfg) }))
+      .filter(({ d, plan }) => plan.eligible && plan.next >= 0 && plan.dueOn <= today && !apContact(d).optedOut)
+      .sort((a, b) => (a.plan.dueOn < b.plan.dueOn ? -1 : 1));
+  }
+  async function apLoad() { await Promise.all([load(byKey.deals), load(byKey.contacts), load(byKey.companies), load(byKey.users)]); }
+  async function apAdvance(deal, channel, step) {
+    const cfg = apCfg();
+    const p = deal.payload;
+    const patch = {};
+    if ((Number(p.seq_step) || 0) <= step) { patch.seq_step = step + 1; if (step + 1 >= 3) patch.seq_status = 'Done'; }
+    if (!p.seq_start) patch.seq_start = apPlan(deal, cfg).start;
+    if (!p.seq_status && !patch.seq_status) patch.seq_status = 'Active';
+    if (Object.keys(patch).length) {
+      await api('POST', '/api/vault/update-record', { registry_id: byKey.deals.reg.id, record_id: deal.id, payload: patch });
+      Object.assign(p, patch);
+    }
+    try {
+      await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
+        { subject: `Day ${cfg.days[step]} auto follow-up — ${channel}`, type: channel, outcome: 'Note', deal: deal.id, date: todayISO() },
+        p.company ? { company: p.company } : {}, p.contact ? { contact: p.contact } : {}, settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}) });
+      delete cache.activities;
+    } catch (_) {}
+  }
+  function apCard(deal, plan, onDone) {
+    const cfg = apCfg();
+    const who = apContact(deal);
+    const step = plan.next;
+    const tpl = cfg.steps[step];
+    const sms = apFill(tpl.sms, deal, who), subject = apFill(tpl.subject, deal, who), body = apFill(tpl.email, deal, who);
+    const late = daysBetween(plan.dueOn, todayISO());
+    const phone = String(who.phone).replace(/[^\d+]/g, '');
+    const used = new Set();
+    const mark = async (ch, btn) => {
+      used.add(ch); btn.classList.add('done'); btn.querySelector('span').textContent = ch === 'Text' ? 'Text opened' : 'Email opened';
+      await apAdvance(deal, ch, step);
+      if (onDone) onDone(deal);
+    };
+    const textBtn = phone && who.consent
+      ? el('a', { class: 'btn primary sm', href: `sms:${phone}?&body=${encodeURIComponent(sms)}`, onclick: (e) => mark('Text', e.currentTarget) }, icon('chat'), el('span', {}, 'Send text'))
+      : el('span', { class: 'ap-off', title: phone ? 'Mark “OK to text” on the contact once you have consent' : 'No phone on file' }, icon('chat'), phone ? 'No text consent' : 'No phone');
+    const emailBtn = who.email
+      ? el('a', { class: 'btn sm', href: `mailto:${who.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, onclick: (e) => mark('Email', e.currentTarget) }, icon('mail2'), el('span', {}, 'Send email'))
+      : el('span', { class: 'ap-off' }, icon('mail2'), 'No email');
+    return el('article', { class: 'ap-card' },
+      el('div', { class: 'ap-top' },
+        el('span', { class: 'ap-day' }, `Day ${cfg.days[step]}`),
+        el('div', { class: 'ap-who' }, el('b', {}, titleOf(byKey.deals, deal)), el('small', {}, [who.first + (who.last ? ' ' + who.last : ''), deal.payload.stage].filter(Boolean).join(' · '))),
+        el('span', { class: 'kdue ' + (late > 0 ? 'late' : 'today') }, late > 0 ? `${late}d late` : 'Due today')),
+      el('details', { class: 'ap-preview' }, el('summary', {}, 'Preview message'), el('p', {}, sms), el('p', { class: 'ap-email' }, el('b', {}, subject), el('br'), body)),
+      el('div', { class: 'ap-actions' }, textBtn, emailBtn,
+        el('button', { class: 'btn ghost sm', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; await apAdvance(deal, 'Note', step); if (onDone) onDone(deal); toast('Skipped this follow-up'); } }, 'Skip'),
+        el('a', { class: 'btn ghost sm', href: `#/t/deals?open=${deal.id}`, onclick: closeDrawer }, 'Open deal')));
+  }
+  async function openAutopilot() {
+    await apLoad();
+    const cfg = apCfg();
+    const due = apDue();
+    const list = el('div', { class: 'ap-list wide' });
+    const draw = () => {
+      const now = apDue();
+      list.replaceChildren(...(now.length ? now.slice(0, 60).map(({ d, plan }) => apCard(d, plan, () => setTimeout(() => { draw(); updateApBadge(); }, 400)))
+        : [el('div', { class: 'empty', style: 'padding:24px' }, el('div', { class: 'empty-mark' }, icon('check')), el('h3', {}, 'All caught up'), el('p', {}, 'No automatic follow-ups are due right now.'))]));
+    };
+    draw();
+    const active = (cache.deals || []).filter((d) => apPlan(d, cfg).eligible && apPlan(d, cfg).next >= 0).length;
+    showDrawer(
+      el('div', { class: 'drawer-head' },
+        el('div', {}, el('div', { class: 'eyebrow' }, cfg.on ? `Autopilot on · ${active} deals in sequence` : 'Autopilot off'), el('h2', { id: 'drawerTitle' }, 'Auto follow-ups')),
+        el('button', { class: 'btn sm', type: 'button', onclick: openApSettings }, icon('sliders'), 'Set up'),
+        el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
+      el('div', { class: 'drawer-body' },
+        el('p', { class: 'hint wide', style: 'margin:0' }, `Open deals in ${cfg.stages.join(', ')} get a text and email on day ${cfg.days.join(', ')}. Each card is ready to send from your phone with the customer’s number, email and message filled in. It stops when the deal is sold or lost, or the customer opts out.`),
+        list));
+    void due;
+  }
+  function openApSettings() {
+    const cfg = apCfg();
+    const on = el('input', { type: 'checkbox', id: 'ap_on', checked: cfg.on });
+    const dayIn = cfg.days.map((d, i) => el('input', { class: 'input', type: 'number', min: 1, max: 365, value: d, 'aria-label': `Follow-up ${i + 1} day` }));
+    const stageBoxes = STAGE_LIST.filter((x) => !['Sold', 'Lost'].includes(x)).map((st) => {
+      const b = el('input', { type: 'checkbox', value: st, checked: cfg.stages.includes(st) });
+      return { b, row: el('label', { class: 'ap-stage' }, b, st) };
+    });
+    const tplIn = cfg.steps.map((t) => ({
+      sms: el('textarea', { class: 'textarea', rows: 3, value: t.sms }),
+      subject: el('input', { class: 'input', value: t.subject }),
+      email: el('textarea', { class: 'textarea', rows: 6, value: t.email })
+    }));
+    const save = () => {
+      settings.autopilot = {
+        on: on.checked, days: dayIn.map((x) => Number(x.value) || 7),
+        stages: stageBoxes.filter((x) => x.b.checked).map((x) => x.b.value),
+        steps: tplIn.map((t) => ({ sms: t.sms.value, subject: t.subject.value, email: t.email.value }))
+      };
+      saveSettings();
+      toast('Autopilot saved');
+      openAutopilot();
+      updateApBadge();
+    };
+    showDrawer(
+      el('div', { class: 'drawer-head' }, el('div', {}, el('div', { class: 'eyebrow' }, 'Auto follow-ups'), el('h2', { id: 'drawerTitle' }, 'Set up autopilot')),
+        el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
+      el('div', { class: 'drawer-body' },
+        el('div', { class: 'field set-row wide' }, el('label', { for: 'ap_on', style: 'font-weight:600' }, 'Autopilot on'), el('label', { class: 'toggle' }, on, el('i'))),
+        el('div', { class: 'field wide' }, el('span', {}, 'Send follow-ups on these days after the sequence starts'), el('div', { class: 'ap-days' }, dayIn.map((x, i) => el('label', {}, el('small', {}, `Follow-up ${i + 1}`), x)))),
+        el('div', { class: 'field wide' }, el('span', {}, 'Run for deals in these stages'), el('div', { class: 'ap-stages' }, stageBoxes.map((x) => x.row))),
+        el('p', { class: 'hint wide', style: 'margin:0' }, 'Fill-ins: {first_name} {last_name} {rep_name} {rep_first} {rep_phone} {company} {kw}'),
+        tplIn.map((t, i) => el('details', { class: 'fsec wide', open: i === 0 ? true : null },
+          el('summary', {}, el('span', { class: 'fsec-ic' }, el('b', { style: 'font-size:12px' }, String(i + 1))), el('b', {}, `Follow-up ${i + 1} messages`)),
+          el('div', { class: 'fsec-body' },
+            el('label', { class: 'field wide' }, el('span', {}, 'Text message'), t.sms),
+            el('label', { class: 'field wide' }, el('span', {}, 'Email subject'), t.subject),
+            el('label', { class: 'field wide' }, el('span', {}, 'Email'), t.email)))),
+        el('div', { class: 'ap-legal wide' }, icon('flag'), el('div', {},
+          el('b', {}, 'Texting rules'), el('p', {}, 'Only text customers who agreed to receive texts (turn on “OK to text” on their contact). Honor any opt-out right away: replies like STOP, QUIT, END, CANCEL or UNSUBSCRIBE, or “Opted out” on the contact, stop the sequence. Rules vary by state; check with your attorney before sending marketing texts.')))),
+      el('div', { class: 'drawer-foot' }, el('button', { class: 'btn ghost', onclick: () => { settings.autopilot = undefined; saveSettings(); openApSettings(); } }, 'Reset messages'), el('span', { class: 'spacer' }),
+        el('button', { class: 'btn ghost', onclick: openAutopilot }, 'Cancel'), el('button', { class: 'btn primary', onclick: save }, 'Save')));
+  }
+  function apTimeline(deal) {
+    const cfg = apCfg();
+    const plan = apPlan(deal, cfg);
+    const who = apContact(deal);
+    const today = todayISO();
+    const status = !cfg.on ? 'Autopilot is off' : DONE.has(deal.payload.stage) ? 'Stopped — deal closed' : who.optedOut || deal.payload.seq_status === 'Opted out' ? 'Stopped — customer opted out'
+      : deal.payload.seq_status === 'Paused' ? 'Paused' : !cfg.stages.includes(deal.payload.stage) ? `Starts when the deal reaches ${cfg.stages[0]}` : plan.next < 0 ? 'All 3 follow-ups sent' : 'Running';
+    const btn = (label, patch) => el('button', { class: 'btn ghost sm', type: 'button', onclick: async (e) => {
+      e.currentTarget.disabled = true;
+      await api('POST', '/api/vault/update-record', { registry_id: byKey.deals.reg.id, record_id: deal.id, payload: patch });
+      Object.assign(deal.payload, patch); delete cache.deals; toast('Updated'); closeDrawer(); render(); updateApBadge();
+    } }, label);
+    return el('div', { class: 'ap-timeline wide' },
+      el('h3', {}, icon('send'), 'Auto follow-up', el('small', {}, status)),
+      el('ol', {}, cfg.days.map((d, i) => {
+        const date = plan.dates[i];
+        const st = i < plan.sent ? 'sent' : plan.eligible && date <= today && i === plan.next ? 'due' : 'upcoming';
+        return el('li', { class: st }, el('span', { class: 'ap-dot' }, st === 'sent' ? icon('check') : String(i + 1)),
+          el('b', {}, `Day ${d}`), el('small', {}, `${st === 'sent' ? 'Sent' : st === 'due' ? 'Due' : 'Scheduled'} · ${fmtDate(date)}`));
+      })),
+      el('div', { class: 'ap-row' },
+        el('span', { class: 'hint', style: 'padding:0' }, [who.phone ? `📱 ${who.phone}${who.consent ? '' : ' (no text consent)'}` : 'No phone', who.email ? `✉️ ${who.email}` : 'No email'].join('  ·  ')),
+        deal.payload.seq_status === 'Paused' ? btn('Resume', { seq_status: 'Active' }) : plan.next >= 0 && plan.eligible ? btn('Pause', { seq_status: 'Paused' }) : null,
+        btn('Restart', { seq_status: 'Active', seq_step: 0, seq_start: today })));
+  }
+  async function updateApBadge() {
+    const t = $('#apTile');
+    if (!t) return;
+    try { await apLoad(); } catch (_) { return; }
+    const n = apDue().length;
+    const art = t.querySelector('.qart');
+    const old = art.querySelector('.qbadge'); if (old) old.remove();
+    if (n) art.append(el('span', { class: 'qbadge' }, n > 99 ? '99+' : n));
+    const sub = t.querySelector('.qsub'); if (sub) sub.textContent = n ? `${n} ready to send` : 'All caught up';
+  }
+
   const OUTCOME_STAGE = { 'Appointment set': 'Appointment set', 'Proposal sent': 'Proposal sent', Sold: 'Sold', 'Not interested': 'Lost' };
   function quickLog(spec, rec) {
     const type = el('select', { class: 'select', 'aria-label': 'Activity type' }, ACT_TYPES.map((t) => el('option', { value: t }, t)));
@@ -1328,7 +1659,9 @@
         if (DONE.has(p.stage)) to = null;
         const patch = {};
         if (to) patch.stage = to;
-        if (to === 'Sold' || to === 'Lost') patch.close_date = todayISO();
+        if (to === 'Sold' || to === 'Lost') { patch.close_date = todayISO(); patch.seq_status = 'Done'; }
+        else if (to && apCfg().stages.includes(to) && !p.seq_start) Object.assign(patch, { seq_start: todayISO(), seq_status: 'Active', seq_step: 0 });
+        if (outcome === 'Not interested') patch.seq_status = 'Done';
         if (fu.value && fu.value !== String(p.follow_up || '').slice(0, 10)) patch.follow_up = fu.value;
         if (Object.keys(patch).length) await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
         delete cache.activities; delete cache[spec.key];
@@ -1462,6 +1795,7 @@
     const form = el('form', { class: 'drawer-body', novalidate: true, onsubmit: (e) => { e.preventDefault(); save(); } },
       errorBox,
       rec && spec.key === 'deals' && byKey.activities ? quickLog(spec, rec) : null,
+      rec && spec.key === 'deals' ? (await apLoad(), apTimeline(rec)) : null,
       rec && !['feed', 'notepad'].includes(spec.key) ? await chatterSection(spec, rec) : null,
       layoutFields(fields.map((k) => {
         const t = typeOf(spec, k);
@@ -1659,9 +1993,10 @@
       ['messages', 'g3', { body: 'Nguyen asked about the battery again. Can you join the call tomorrow?', from_user: '@u2', to_user: '@u1', pin_key: 'deals', pin_id: '@d2', pin_label: 'Nguyen — 9.6 kW + battery', seen: false }],
       ['messages', 'g4', { body: 'Kim’s monitoring is offline. Heading there after lunch.', from_user: '@u3', to_user: '@u2', pin_key: 'projects', pin_id: '@j2', pin_label: 'Kim — project', seen: false }],
       ['feed', 'f1', { body: 'Site survey is booked for Thursday 10am. Please confirm the crew.', about: 'Patel — project', about_key: 'projects', about_id: '@j1', author: '@u1', notify: '@u3', seen: false }],
-      ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false, pinned: true, pinned_by: '@u1' }],
-      ['feed', 'f4', { body: 'Reminder: every permit packet needs roof photos and the main panel label before it goes to the city. No exceptions.', about: 'Team update', author: '@u1', seen: true, pinned: true, pinned_by: '@u1' }],
-      ['feed', 'f5', { body: 'Saturday canvass in Rocklin starts 10am at the usual spot. Bring door hangers.', about: 'Team update', author: '@u2', seen: true }],
+      ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false, pinned: true, pinned_by: '@u1', pin_audience: 'all' }],
+      ['feed', 'f4', { body: 'Reminder: every permit packet needs roof photos and the main panel label before it goes to the city. No exceptions.', about: 'Team update', author: '@u1', seen: true, pinned: true, pinned_by: '@u1', pin_audience: 'all' }],
+      ['feed', 'f5', { body: 'Saturday canvass in Rocklin starts 10am at the usual spot. Bring door hangers.', about: 'Team update', author: '@u2', seen: true, pinned: true, pinned_by: '@u2', pin_audience: 'team:Setter' }],
+      ['feed', 'f6', { body: 'Avery, Sam: the city wants the stamped plans re-uploaded for Whitaker before Friday.', about: 'Whitaker — project', about_key: 'projects', about_id: '@j5', author: '@u3', seen: true, pinned: true, pinned_by: '@u3', pin_audience: 'users:@u1,@u3' }],
       ['feed', 'f3', { body: 'Monitoring shows offline since yesterday. Can you check the gateway on your visit?', about: 'Kim — project', about_key: 'projects', about_id: '@j2', author: '@u3', notify: '@u1', seen: false }],
 
       ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Sent the last 12 months of PG&E bills for the proposal.' }],
@@ -1708,7 +2043,8 @@
       const body = {};
       for (const [k, v] of Object.entries(payload)) {
         if (!(k in schemaOf(spec))) continue;
-        body[k] = typeof v === 'string' && v.startsWith('@') ? ids[v.slice(1)] : v;
+        body[k] = typeof v === 'string' && v.startsWith('@') ? ids[v.slice(1)]
+          : typeof v === 'string' && v.startsWith('users:') ? 'users:' + v.slice(6).split(',').map((x) => (x.startsWith('@') ? ids[x.slice(1)] : x)).filter(Boolean).join(',') : v;
         if (body[k] === undefined) delete body[k];
       }
       const r = await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload: body });
@@ -1785,7 +2121,7 @@
     const contactIds = await bulk('contacts', jobs.map((j, i) => {
       const [first, last] = j.name.split(' ');
       return { first_name: first, last_name: last, company: j.home, location: propIds[i], job_title: 'Homeowner', decision_maker: true,
-        email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`, phone: `916-555-${String(between(1000, 9999))}` };
+        email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`, phone: `916-555-${String(between(1000, 9999))}`, text_consent: rnd() < 0.85, opted_out: rnd() < 0.03 };
     }));
     jobs.forEach((j, i) => { j.contact = contactIds[i]; });
 
@@ -1797,7 +2133,12 @@
       const closed = j.stage === 'Sold' || j.stage === 'Lost';
       return Object.assign({ deal_name: `${j.name.split(' ')[1]} — ${j.kw} kW`, stage: j.stage, value: j.value, system_size_kw: j.kw, financing: j.fin, battery: j.battery,
         company: j.home, contact: j.contact, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
-        closed ? { close_date: day(-between(0, 25)) } : { follow_up: day(between(-6, 12)) });
+        closed ? { close_date: day(-between(0, 25)), seq_status: 'Done' } : { follow_up: day(between(-6, 12)) },
+        ['Follow-up', 'Appointment set', 'Proposal sent'].includes(j.stage) ? (() => {
+          const age = between(0, 40); const passed = [7, 15, 30].filter((d) => d <= age).length;
+          const sent = Math.max(0, passed - (rnd() < 0.45 ? 1 : 0));
+          return { seq_start: day(-age), seq_step: sent, seq_status: sent >= 3 ? 'Done' : rnd() < 0.05 ? 'Paused' : 'Active' };
+        })() : {});
     }));
     dealJobs.forEach((j, i) => { j.id = dealIds[i]; });
 
@@ -1887,7 +2228,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 8;
+  const SAMPLE_VERSION = 10;
 
   // ---------------------------------------------------------------------
   // New table builder

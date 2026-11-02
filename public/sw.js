@@ -4,9 +4,9 @@
  * cache in the background (stale-while-revalidate). New deploys show up on the
  * next visit. API calls (server mode) are never cached.
  */
-const CACHE = 'vault-shell-v11';
+const CACHE = 'vault-shell-v13';
 const SHELL = [
-  './', 'index.html', 'app.css?v=11', 'app.js?v=11', 'local-engine.js?v=11',
+  './', 'index.html', 'app.css?v=13', 'app.js?v=13', 'local-engine.js?v=13',
   'img/vault-logo.svg', 'img/marble-dark.webp', 'img/marble-light.webp'
 ];
 
