@@ -263,7 +263,8 @@
       title: (p) => p.event, columns: ['event', 'date', 'status', 'value'], sort: { field: 'date', dir: 1 } },
     { key: 'feed', table: 'Chatter', label: 'Chatter', single: 'post', icon: 'chat', group: 'Notes', view: 'feed',
       fields: [f('body', 'LONGTEXT', { label: 'Message' }), f('about', 'TEXT'), f('about_key', 'TEXT'), f('about_id', 'TEXT'),
-        f('author', 'REF:@users', { label: 'From' }), f('notify', 'REF:@users', { label: 'For' }), f('seen', 'BOOLEAN')],
+        f('author', 'REF:@users', { label: 'From' }), f('notify', 'REF:@users', { label: 'For' }), f('seen', 'BOOLEAN'),
+        f('pinned', 'BOOLEAN', { label: 'Pinned for everyone' }), f('pinned_by', 'REF:@users', { label: 'Pinned by' })],
       hide: ['about_key', 'about_id'],
       title: (p) => p.about || 'Post', columns: ['about', 'body', 'author', 'notify', 'seen'] },
     { key: 'messages', table: 'Messages', label: 'Messages', single: 'message', icon: 'chat', group: 'Notes', view: 'chat',
@@ -581,7 +582,7 @@
   async function renderHome() {
     setCrumbs(settings.workspace || 'Workspace', 'Home');
     const projects = byKey.projects;
-    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts), load(byKey.deals), load(byKey.activities), load(byKey.calendar)]);
+    await Promise.all([loadWithRefs(projects), load(byKey.companies), load(byKey.locations), load(byKey.contacts), load(byKey.deals), load(byKey.activities), load(byKey.calendar), load(byKey.feed), load(byKey.users)]);
     const all = cache.projects;
     const open = all.filter((r) => !DONE.has(r.payload.status));
 
@@ -708,7 +709,13 @@
       el('div', { class: 'searches' }, searchBox('companies'), searchBox('locations'), searchBox('contacts')));
 
     searches.classList.replace('span-8', 'span-12');
-    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), quick, journey, todayCard, board, searches);
+    // ---- Pinned for the team: every note anyone pinned ----
+    const pinnedPosts = (cache.feed || []).filter((x) => x.payload.pinned).sort(byPinned);
+    const pinsCard = pinnedPosts.length ? el('section', { class: 'card span-12 reveal pinned-card' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for the team'), el('span', { class: 'kcount' }, pinnedPosts.length),
+        el('a', { class: 'btn ghost sm', href: '#/t/feed', style: 'margin-left:auto' }, 'All Chatter', icon('arrowR'))),
+      el('div', { class: 'posts pins-grid' }, pinnedPosts.slice(0, 6).map((x) => postView(x, true, () => render())))) : null;
+    return el('div', { class: 'home-grid' }, el('div', { class: 'span-12' }, head), pinsCard, quick, journey, todayCard, board, searches);
   }
 
   // ---------------------------------------------------------------------
@@ -964,13 +971,14 @@
   const userRec = (id) => (cache.users || []).find((u) => u.id === id);
   const userName = (id) => { const u = userRec(id); return u ? u.payload.name || 'Teammate' : null; };
   const appLink = (key, id) => `${location.origin}${location.pathname}#/t/${key}?open=${id}`;
-  async function postChatter(spec, rec, body, notify, auto) {
+  async function postChatter(spec, rec, body, notify, auto, extra) {
     const F = byKey.feed;
     if (!F || !rec || spec.key === 'feed' || !String(body || '').trim()) return null;
     const payload = { body: String(body).trim().slice(0, 9000), about: titleOf(spec, rec), about_key: spec.key, about_id: rec.id, seen: false };
     if (settings.meId) payload.author = settings.meId;
     if (notify && notify !== settings.meId) payload.notify = notify;
     if (auto && !payload.notify) return null; // automatic posts only when someone needs to act
+    if (extra && extra.pinned) { payload.pinned = true; if (settings.meId) payload.pinned_by = settings.meId; }
     try { const r = await api('POST', '/api/vault/insert-record', { registry_id: F.reg.id, payload }); delete cache.feed; return r.record; } catch (_) { return null; }
   }
   function shareLinks(post) {
@@ -982,19 +990,39 @@
       phone ? el('a', { class: 'chip sm', href: `sms:${phone}?&body=${encodeURIComponent(msg)}`, onclick: (e) => e.stopPropagation() }, icon('chat'), 'Text ' + (u.payload.name || '').split(' ')[0]) : null,
       u.payload.email ? el('a', { class: 'chip sm', href: `mailto:${u.payload.email}?subject=${encodeURIComponent('VaultCRM: ' + post.payload.about)}&body=${encodeURIComponent(msg)}`, onclick: (e) => e.stopPropagation() }, icon('mail2'), 'Email') : null);
   }
-  function postView(post, showAbout) {
+  function postView(post, showAbout, onChange) {
     const p = post.payload;
     const from = userName(p.author) || 'Someone';
     const when = new Date(post.date_created);
-    return el('article', { class: 'post' + (p.notify === settings.meId && !p.seen ? ' unread' : '') },
+    const pinBtn = el('button', { class: 'post-pin' + (p.pinned ? ' on' : ''), type: 'button', 'aria-pressed': String(!!p.pinned),
+      'aria-label': p.pinned ? 'Unpin for everyone' : 'Pin for everyone', title: p.pinned ? 'Unpin for everyone' : 'Pin for everyone',
+      onclick: async (e) => { e.stopPropagation(); await togglePin(post); if (onChange) onChange(); else { const v = postView(post, showAbout, onChange); node.replaceWith(v); } } }, icon('pin'));
+    const node = el('article', { class: 'post' + (p.notify === settings.meId && !p.seen ? ' unread' : '') + (p.pinned ? ' pinned' : '') },
       el('span', { class: 'post-av' }, initials(from)),
       el('div', { class: 'post-main' },
+        p.pinned ? el('div', { class: 'post-pinned' }, icon('pin'), 'Pinned for everyone' + (p.pinned_by && userName(p.pinned_by) ? ` by ${userName(p.pinned_by)}` : '')) : null,
         el('div', { class: 'post-meta' }, el('b', {}, from),
           p.notify ? el('span', { class: 'post-for' }, icon('arrowR'), userName(p.notify) || 'Teammate') : null,
-          el('time', { datetime: post.date_created, title: when.toLocaleString() }, fmtWhen(when))),
-        showAbout ? el('a', { class: 'post-about', href: `#/t/${p.about_key}?open=${p.about_id}`, onclick: () => markSeen(post) }, p.about) : null,
+          el('time', { datetime: post.date_created, title: when.toLocaleString() }, fmtWhen(when)), pinBtn),
+        showAbout ? (p.about_key ? el('a', { class: 'post-about', href: `#/t/${p.about_key}?open=${p.about_id}`, onclick: () => markSeen(post) }, p.about) : el('span', { class: 'post-about team' }, icon('users'), p.about || 'Team')) : null,
         el('p', { class: 'post-body' }, p.body),
         p.notify && p.notify !== settings.meId ? shareLinks(post) : null));
+    return node;
+  }
+  async function togglePin(post) {
+    const on = !post.payload.pinned;
+    const patch = { pinned: on, pinned_by: on && settings.meId ? settings.meId : null };
+    try {
+      await api('POST', '/api/vault/update-record', { registry_id: byKey.feed.reg.id, record_id: post.id, payload: patch });
+      post.payload.pinned = on;
+      if (on && settings.meId) post.payload.pinned_by = settings.meId; else delete post.payload.pinned_by;
+      toast(on ? 'Pinned for everyone' : 'Unpinned');
+    } catch (e) { toast(e.message, true); }
+  }
+  const byPinned = (a, b) => (!!b.payload.pinned - !!a.payload.pinned) || (a.date_created < b.date_created ? 1 : -1);
+  function pinSwitch(id) {
+    const box = el('input', { type: 'checkbox', id });
+    return { box, row: el('label', { class: 'pin-switch', for: id }, el('span', { class: 'toggle' }, box, el('i')), icon('pin'), 'Pin for everyone') };
   }
   function fmtWhen(d) {
     const mins = Math.round((Date.now() - d.getTime()) / 60000);
@@ -1010,30 +1038,32 @@
   async function chatterSection(spec, rec) {
     if (!byKey.feed) return null;
     await Promise.all([load(byKey.feed), load(byKey.users)]);
-    const posts = (cache.feed || []).filter((r) => r.payload.about_key === spec.key && r.payload.about_id === rec.id)
-      .sort((a, b) => (a.date_created < b.date_created ? 1 : -1));
+    const posts = (cache.feed || []).filter((r) => r.payload.about_key === spec.key && r.payload.about_id === rec.id).sort(byPinned);
     posts.forEach(markSeen);
+    const pinner = pinSwitch('chatter_pin');
     const text = el('textarea', { class: 'textarea', rows: 2, placeholder: 'Write a note… the person below gets notified', 'aria-label': 'Chatter note' });
     const users = (cache.users || []).filter((u) => u.payload.active !== false);
     const who = el('select', { class: 'select', 'aria-label': 'Notify' }, el('option', { value: '' }, 'No one'),
       users.map((u) => el('option', { value: u.id, selected: u.id === respOf(rec.payload) }, u.payload.name || 'Teammate')));
-    const list = el('div', { class: 'posts' }, posts.length ? posts.slice(0, 20).map((x) => postView(x)) : el('p', { class: 'hint', style: 'margin:0' }, 'No notes yet. Post one to loop in the team.'));
+    const list = el('div', { class: 'posts' });
+    const redraw = () => { posts.sort(byPinned); list.replaceChildren(...(posts.length ? posts.slice(0, 30).map((x) => postView(x, false, redraw)) : [el('p', { class: 'hint', style: 'margin:0' }, 'No notes yet. Post one to loop in the team.')])); };
+    redraw();
     const btn = el('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
       if (!text.value.trim()) { text.focus(); return; }
       btn.disabled = true;
-      const made = await postChatter(spec, rec, text.value, who.value || null, false);
+      const made = await postChatter(spec, rec, text.value, who.value || null, false, { pinned: pinner.box.checked });
       btn.disabled = false;
       if (!made) { toast('Couldn’t post that note', true); return; }
-      text.value = '';
-      const hint = list.querySelector('.hint'); if (hint) hint.remove();
-      list.prepend(postView(made));
-      toast(made.payload.notify ? `Posted · ${userName(made.payload.notify)} notified` : 'Posted');
+      text.value = ''; pinner.box.checked = false;
+      posts.push(made); redraw();
+      toast((made.payload.pinned ? 'Pinned for everyone' : 'Posted') + (made.payload.notify ? ` · ${userName(made.payload.notify)} notified` : ''));
       updateBell();
     } }, icon('send'), 'Post');
     return el('div', { class: 'chatter wide' },
       el('h3', {}, icon('chat'), 'Chatter', el('span', {}, posts.length)),
       text,
       el('div', { class: 'chatter-row' }, el('label', { class: 'ql-fu' }, el('span', {}, 'Notify'), who), btn),
+      pinner.row,
       list);
   }
   async function updateBell() {
@@ -1067,8 +1097,39 @@
         unread.length ? el('button', { class: 'btn', onclick: async () => { for (const x of unread) await markSeen(x); closeDrawer(); toast('All caught up'); } }, icon('check'), 'Mark all read') : null));
   }
   function renderFeed(spec, recs) {
-    const sorted = recs.slice().sort((a, b) => (a.date_created < b.date_created ? 1 : -1));
-    return el('div', { class: 'card reveal' }, el('div', { class: 'posts' }, sorted.slice(0, 200).map((x) => postView(x, true))));
+    const all = recs.slice();
+    const pinnedBox = el('div', { class: 'posts' });
+    const restBox = el('div', { class: 'posts' });
+    const pinnedCard = el('section', { class: 'card reveal pinned-card' }, el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, icon('pin'), 'Pinned for the team')), pinnedBox);
+    const draw = () => {
+      const pins = all.filter((x) => x.payload.pinned).sort(byPinned);
+      const rest = all.filter((x) => !x.payload.pinned).sort(byPinned);
+      pinnedCard.hidden = !pins.length;
+      pinnedBox.replaceChildren(...pins.map((x) => postView(x, true, draw)));
+      restBox.replaceChildren(...(rest.length ? rest.slice(0, 200).map((x) => postView(x, true, draw)) : [el('p', { class: 'hint' }, 'No notes yet.')]));
+    };
+    draw();
+    const text = el('textarea', { class: 'textarea', rows: 2, placeholder: 'Post an update for the whole team…', 'aria-label': 'Team update' });
+    const pinner = pinSwitch('feed_pin');
+    const btn = el('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
+      const body = text.value.trim();
+      if (!body) { text.focus(); return; }
+      btn.disabled = true;
+      const payload = { body: body.slice(0, 9000), about: 'Team update', seen: true };
+      if (settings.meId) payload.author = settings.meId;
+      if (pinner.box.checked) { payload.pinned = true; if (settings.meId) payload.pinned_by = settings.meId; }
+      try {
+        const r = await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload });
+        all.push(r.record); delete cache.feed;
+        text.value = ''; pinner.box.checked = false; draw();
+        toast(payload.pinned ? 'Pinned for everyone' : 'Posted');
+      } catch (e) { toast(e.message, true); }
+      btn.disabled = false;
+    } }, icon('send'), 'Post');
+    const composer = el('section', { class: 'card reveal chatter' },
+      el('h3', {}, icon('users'), 'Post to the whole team'), text,
+      el('div', { class: 'chatter-row' }, pinner.row, el('span', { class: 'spacer', style: 'flex:1' }), btn));
+    return el('div', { class: 'feed-page' }, composer, pinnedCard, el('section', { class: 'card reveal' }, el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'All notes')), restBox));
   }
 
   // ---------------------------------------------------------------------
@@ -1598,7 +1659,9 @@
       ['messages', 'g3', { body: 'Nguyen asked about the battery again. Can you join the call tomorrow?', from_user: '@u2', to_user: '@u1', pin_key: 'deals', pin_id: '@d2', pin_label: 'Nguyen — 9.6 kW + battery', seen: false }],
       ['messages', 'g4', { body: 'Kim’s monitoring is offline. Heading there after lunch.', from_user: '@u3', to_user: '@u2', pin_key: 'projects', pin_id: '@j2', pin_label: 'Kim — project', seen: false }],
       ['feed', 'f1', { body: 'Site survey is booked for Thursday 10am. Please confirm the crew.', about: 'Patel — project', about_key: 'projects', about_id: '@j1', author: '@u1', notify: '@u3', seen: false }],
-      ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false }],
+      ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false, pinned: true, pinned_by: '@u1' }],
+      ['feed', 'f4', { body: 'Reminder: every permit packet needs roof photos and the main panel label before it goes to the city. No exceptions.', about: 'Team update', author: '@u1', seen: true, pinned: true, pinned_by: '@u1' }],
+      ['feed', 'f5', { body: 'Saturday canvass in Rocklin starts 10am at the usual spot. Bring door hangers.', about: 'Team update', author: '@u2', seen: true }],
       ['feed', 'f3', { body: 'Monitoring shows offline since yesterday. Can you check the gateway on your visit?', about: 'Kim — project', about_key: 'projects', about_id: '@j2', author: '@u3', notify: '@u1', seen: false }],
 
       ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Sent the last 12 months of PG&E bills for the proposal.' }],
@@ -1788,9 +1851,11 @@
   }
   async function removeStraySample() {
     const set = sampleSet();
+    // Only tables whose sample titles are distinctive; notes, chats and auto-named activities could match real ones
+    const SKIP = new Set(['activities', 'feed', 'messages', 'indi_projects', 'scripts_mail', 'scripts_sent']);
     for (const key of SPEC.map((x) => x.key).reverse()) {
       const spec = byKey[key];
-      if (!spec) continue;
+      if (!spec || SKIP.has(key)) continue;
       const titles = new Set(set.filter(([k]) => k === key).map(([, , p]) => (spec.title ? spec.title(p) : '') || '').filter(Boolean));
       if (!titles.size) continue;
       const recs = await load(spec, true);
@@ -1822,7 +1887,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 7;
+  const SAMPLE_VERSION = 8;
 
   // ---------------------------------------------------------------------
   // New table builder
