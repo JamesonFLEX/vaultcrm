@@ -77,6 +77,8 @@
     panel: 'M3 7h18l-2 10H5zM9 7l-1 10M15 7l1 10M4 12h16',
     wallet: 'M3 7a2 2 0 0 1 2-2h13v4M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2zM16 14h.01',
     pulse: 'M3 12h4l3-8 4 16 3-8h4',
+    pin: 'M12 17v5M9 3h6l-1 6 4 4H6l4-4z',
+    back: 'M15 6l-6 6 6 6',
     mail2: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 7l9 6 9-6'
   };
   function icon(name, cls = 'i') {
@@ -264,6 +266,11 @@
         f('author', 'REF:@users', { label: 'From' }), f('notify', 'REF:@users', { label: 'For' }), f('seen', 'BOOLEAN')],
       hide: ['about_key', 'about_id'],
       title: (p) => p.about || 'Post', columns: ['about', 'body', 'author', 'notify', 'seen'] },
+    { key: 'messages', table: 'Messages', label: 'Messages', single: 'message', icon: 'chat', group: 'Notes', view: 'chat',
+      fields: [f('body', 'LONGTEXT', { label: 'Message' }), f('from_user', 'REF:@users', { label: 'From' }), f('to_user', 'REF:@users', { label: 'To' }),
+        f('pin_key', 'TEXT'), f('pin_id', 'TEXT'), f('pin_label', 'TEXT', { label: 'Pinned' }), f('seen', 'BOOLEAN')],
+      hide: ['pin_key', 'pin_id'],
+      title: (p) => p.body ? String(p.body).slice(0, 60) : 'Message', columns: ['body', 'from_user', 'to_user', 'pin_label', 'seen'] },
     { key: 'notepad', table: 'Notepad', label: 'Notepad', single: 'note', icon: 'note', group: 'Notes', view: 'notes',
       fields: [f('title', 'TEXT'), f('body', 'LONGTEXT'), f('pinned', 'BOOLEAN')],
       title: (p) => p.title, columns: ['title', 'body', 'pinned'] }
@@ -556,6 +563,7 @@
       if (r.name !== 'new') node.append(pageFoot(r));
       view.replaceChildren(node);
       updateBell();
+      updateChatBadge();
       stagger(view);
       countUp(view);
     } catch (e) {
@@ -773,6 +781,7 @@
     if (params.open) { const hit = recs.find((r) => r.id === params.open); if (hit) setTimeout(() => openRecord(spec, hit)); }
     if (spec.view === 'notes') return el('div', {}, head, renderNotes(spec, recs));
     if (spec.view === 'feed') { await load(byKey.users); return el('div', {}, head, renderFeed(spec, recs)); }
+    if (spec.view === 'chat') { setTimeout(() => openChat(null)); }
     if (st.mode === 'calendar' && dateField) return el('div', {}, head, renderCalendar(spec, recs, dateField, st));
     if (st.mode === 'board' && spec.boardField) return el('div', {}, head, renderBoard(spec, recs, spec.boardField, st, params));
 
@@ -1062,6 +1071,179 @@
     return el('div', { class: 'card reveal' }, el('div', { class: 'posts' }, sorted.slice(0, 200).map((x) => postView(x, true))));
   }
 
+  // ---------------------------------------------------------------------
+  // Team chat: 1:1 conversations, each message can pin a job / deal / homeowner / task
+  // ---------------------------------------------------------------------
+  const PIN_KEYS = ['projects', 'deals', 'companies', 'indi_projects'];
+  const chatState = { with: null, pin: null };
+  const threadOf = (m, me) => (m.payload.from_user === me ? m.payload.to_user : m.payload.from_user);
+  async function loadChat() { await Promise.all([load(byKey.messages), load(byKey.users)]); return cache.messages || []; }
+  function unreadChat() {
+    const me = settings.meId;
+    return me ? (cache.messages || []).filter((m) => m.payload.to_user === me && !m.payload.seen).length : 0;
+  }
+  async function updateChatBadge() {
+    const b = $('#chatFab');
+    if (!b || !byKey.messages) return;
+    try { await load(byKey.messages); } catch (_) { return; }
+    const n = unreadChat();
+    const old = b.querySelector('.bell-n'); if (old) old.remove();
+    if (n) b.append(el('span', { class: 'bell-n' }, n > 99 ? '99+' : n));
+    b.setAttribute('aria-label', n ? `Team chat, ${n} unread` : 'Team chat');
+  }
+  function pinCard(pin, onRemove) {
+    if (!pin || !pin.key) return null;
+    const spec = byKey[pin.key];
+    return el('div', { class: 'pin-card' },
+      el('a', { href: `#/t/${pin.key}?open=${pin.id}`, onclick: () => closeDrawer() },
+        el('span', { class: 'pin-ic' }, icon(spec ? spec.icon : 'pin')),
+        el('span', { class: 'pin-txt' }, el('small', {}, spec ? humanize(spec.single) : 'Record'), el('b', {}, pin.label))),
+      onRemove ? el('button', { class: 'icon-btn sm', type: 'button', 'aria-label': 'Remove pin', onclick: onRemove }, icon('x')) : null);
+  }
+
+  async function openChat(withId, pin) {
+    if (!byKey.messages) return;
+    await loadChat();
+    if (withId !== undefined) chatState.with = withId;
+    if (pin !== undefined) chatState.pin = pin;
+    if (!settings.meId) return chatWhoAmI();
+    return chatState.with ? chatThread() : chatList();
+  }
+  function chatHead(title, eyebrow, backFn, extra) {
+    return el('div', { class: 'drawer-head chat-head' },
+      backFn ? el('button', { class: 'icon-btn', onclick: backFn, 'aria-label': 'Back to conversations' }, icon('back')) : null,
+      el('div', { style: 'min-width:0' }, el('div', { class: 'eyebrow' }, eyebrow), el('h2', { id: 'drawerTitle' }, title)),
+      extra || null,
+      el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x')));
+  }
+  function chatWhoAmI() {
+    const users = (cache.users || []).filter((u) => u.payload.active !== false);
+    showDrawer(chatHead('Team chat', 'Messages'),
+      el('div', { class: 'drawer-body' },
+        el('p', { class: 'hint wide', style: 'margin:0' }, 'Who are you? Chat needs to know who’s sending.'),
+        el('div', { class: 'people wide' }, users.map((u) => el('button', { class: 'person', type: 'button', onclick: () => { settings.meId = u.id; settings.name = (u.payload.name || '').split(' ')[0]; saveSettings(); openChat(); render(); } },
+          el('span', { class: 'post-av' }, initials(u.payload.name || '?')), el('span', {}, el('b', {}, u.payload.name || 'Teammate'), el('small', {}, u.payload.role || '')))))));
+  }
+  function chatList() {
+    const me = settings.meId;
+    const msgs = (cache.messages || []).filter((m) => m.payload.from_user === me || m.payload.to_user === me);
+    const threads = new Map();
+    msgs.forEach((m) => { const k = threadOf(m, me); const t = threads.get(k); if (!t || t.date_created < m.date_created) threads.set(k, m); });
+    const convo = [...threads.entries()].sort((a, b) => (a[1].date_created < b[1].date_created ? 1 : -1));
+    const users = (cache.users || []).filter((u) => u.id !== me && u.payload.active !== false);
+    const search = el('input', { class: 'input', type: 'search', placeholder: 'Find a teammate', 'aria-label': 'Find a teammate' });
+    const picker = el('div', { class: 'people wide' });
+    const drawPeople = () => {
+      const q = search.value.trim().toLowerCase();
+      picker.replaceChildren(...users.filter((u) => !q || (u.payload.name || '').toLowerCase().includes(q) || (u.payload.role || '').toLowerCase().includes(q))
+        .map((u) => el('button', { class: 'person', type: 'button', onclick: () => openChat(u.id) },
+          el('span', { class: 'post-av' }, initials(u.payload.name || '?')), el('span', {}, el('b', {}, u.payload.name || 'Teammate'), el('small', {}, u.payload.role || '')))));
+    };
+    search.addEventListener('input', drawPeople);
+    drawPeople();
+    showDrawer(chatHead('Team chat', settings.name ? `Signed in as ${settings.name}` : 'Messages'),
+      el('div', { class: 'drawer-body' },
+        chatState.pin ? el('div', { class: 'wide' }, el('div', { class: 'eyebrow', style: 'margin-bottom:6px' }, 'Will be pinned to your next message'), pinCard(chatState.pin, () => { chatState.pin = null; chatList(); })) : null,
+        convo.length ? el('div', { class: 'wide' }, el('div', { class: 'eyebrow', style: 'margin-bottom:8px' }, 'Conversations'),
+          el('div', { class: 'convos' }, convo.map(([uid, last]) => {
+            const unread = msgs.filter((m) => m.payload.from_user === uid && m.payload.to_user === me && !m.payload.seen).length;
+            return el('button', { class: 'convo' + (unread ? ' unread' : ''), type: 'button', onclick: () => openChat(uid) },
+              el('span', { class: 'post-av' }, initials(userName(uid) || '?')),
+              el('span', { class: 'convo-main' }, el('b', {}, userName(uid) || 'Teammate'),
+                el('small', {}, (last.payload.from_user === me ? 'You: ' : '') + (last.payload.pin_label && !last.payload.body ? '📌 ' + last.payload.pin_label : last.payload.body || ''))),
+              el('span', { class: 'convo-side' }, el('time', {}, fmtWhen(new Date(last.date_created))), unread ? el('span', { class: 'convo-n' }, unread) : null));
+          }))) : null,
+        el('div', { class: 'wide' }, el('div', { class: 'eyebrow', style: 'margin-bottom:8px' }, 'Start a conversation'), el('div', { class: 'search', style: 'margin-bottom:8px' }, icon('search'), search)),
+        picker));
+  }
+  async function chatThread() {
+    const me = settings.meId, them = chatState.with;
+    const u = userRec(them);
+    const msgs = (cache.messages || []).filter((m) => (m.payload.from_user === me && m.payload.to_user === them) || (m.payload.from_user === them && m.payload.to_user === me))
+      .sort((a, b) => (a.date_created < b.date_created ? -1 : 1));
+    // mark theirs as read
+    for (const m of msgs) if (m.payload.to_user === me && !m.payload.seen) {
+      m.payload.seen = true;
+      api('POST', '/api/vault/update-record', { registry_id: byKey.messages.reg.id, record_id: m.id, payload: { seen: true } }).catch(() => {});
+    }
+    updateChatBadge();
+    const pins = [];
+    msgs.forEach((m) => { if (m.payload.pin_id && !pins.some((x) => x.id === m.payload.pin_id)) pins.unshift({ key: m.payload.pin_key, id: m.payload.pin_id, label: m.payload.pin_label }); });
+    const bubble = (m) => el('div', { class: 'bubble ' + (m.payload.from_user === me ? 'mine' : 'theirs') },
+      m.payload.pin_id ? pinCard({ key: m.payload.pin_key, id: m.payload.pin_id, label: m.payload.pin_label }) : null,
+      m.payload.body ? el('p', {}, m.payload.body) : null,
+      el('time', { title: new Date(m.date_created).toLocaleString() }, fmtWhen(new Date(m.date_created))));
+    const log = el('div', { class: 'chat-log' }, msgs.length ? msgs.map(bubble) : el('p', { class: 'hint', style: 'text-align:center' }, `Say hi to ${(u && u.payload.name || 'your teammate').split(' ')[0]}. Pin a job so you’re both looking at the same thing.`));
+    const pinSlot = el('div', { class: 'pin-slot' });
+    const drawPin = () => pinSlot.replaceChildren(...(chatState.pin ? [pinCard(chatState.pin, () => { chatState.pin = null; drawPin(); })] : []));
+    drawPin();
+    const text = el('textarea', { class: 'textarea chat-input', rows: 1, placeholder: 'Message…', 'aria-label': 'Message' });
+    text.addEventListener('input', () => { text.style.height = 'auto'; text.style.height = Math.min(text.scrollHeight, 140) + 'px'; });
+    text.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !matchMedia('(pointer: coarse)').matches) { e.preventDefault(); send(); } });
+    const sendBtn = el('button', { class: 'btn primary chat-send', type: 'button', 'aria-label': 'Send', onclick: send }, icon('send'));
+    const pinBtn = el('button', { class: 'btn chat-pin', type: 'button', 'aria-label': 'Pin a job or task', title: 'Pin a job or task', onclick: () => pinPicker((pin) => { chatState.pin = pin; drawPin(); text.focus(); }) }, icon('pin'));
+    async function send() {
+      const body = text.value.trim();
+      if (!body && !chatState.pin) { text.focus(); return; }
+      sendBtn.disabled = true;
+      const payload = { from_user: me, to_user: them, seen: false };
+      if (body) payload.body = body;
+      if (chatState.pin) Object.assign(payload, { pin_key: chatState.pin.key, pin_id: chatState.pin.id, pin_label: chatState.pin.label });
+      try {
+        const r = await api('POST', '/api/vault/insert-record', { registry_id: byKey.messages.reg.id, payload });
+        (cache.messages = cache.messages || []).unshift(r.record);
+        const hint = log.querySelector('.hint'); if (hint) hint.remove();
+        log.append(bubble(r.record));
+        log.scrollTop = log.scrollHeight;
+        text.value = ''; text.style.height = 'auto';
+        chatState.pin = null; drawPin();
+      } catch (e) { toast(e.message, true); }
+      sendBtn.disabled = false;
+      text.focus();
+    }
+    const phone = u && String(u.payload.phone || '').replace(/[^\d+]/g, '');
+    showDrawer(
+      chatHead(u ? u.payload.name || 'Teammate' : 'Teammate', u && u.payload.role ? u.payload.role : 'Conversation', () => { chatState.with = null; chatList(); },
+        phone ? el('a', { class: 'icon-btn', href: `tel:${phone}`, 'aria-label': `Call ${u.payload.name}` }, icon('phone')) : null),
+      el('div', { class: 'drawer-body chat-body' },
+        pins.length ? el('div', { class: 'wide pinned-bar' }, el('span', { class: 'eyebrow' }, icon('pin'), 'Pinned in this chat'), el('div', { class: 'pins-row' }, pins.slice(0, 6).map((x) => pinCard(x)))) : null,
+        el('div', { class: 'wide' }, log)),
+      el('div', { class: 'drawer-foot chat-foot' }, pinSlot, el('div', { class: 'chat-compose' }, pinBtn, text, sendBtn)));
+    requestAnimationFrame(() => { log.scrollTop = log.scrollHeight; const d = $('#drawer'); d.scrollTop = d.scrollHeight; text.focus({ preventScroll: true }); });
+  }
+  async function pinPicker(onPick) {
+    const keys = PIN_KEYS.filter((k) => byKey[k]);
+    await Promise.all(keys.map((k) => load(byKey[k])));
+    const search = el('input', { class: 'input', type: 'search', placeholder: 'Search jobs, deals, homeowners, tasks', 'aria-label': 'Search to pin' });
+    const results = el('div', { class: 'pin-results' });
+    let tab = 'all';
+    const tabs = el('div', { class: 'chips', role: 'group' }, ['all', ...keys].map((k) => el('button', { class: 'chip', type: 'button', 'data-k': k, 'aria-pressed': String(k === tab),
+      onclick: () => { tab = k; [...tabs.children].forEach((c) => c.setAttribute('aria-pressed', String(c.dataset.k === k))); draw(); } }, k === 'all' ? 'All' : labelOf(byKey[k]))));
+    function draw() {
+      const q = search.value.trim().toLowerCase();
+      let rows = [];
+      for (const k of tab === 'all' ? keys : [tab]) {
+        const spec = byKey[k];
+        let recs = cache[k] || [];
+        if (q) recs = recs.filter((r) => searchText(spec, r).includes(q));
+        rows.push(...recs.map((r) => ({ k, spec, r })));
+      }
+      rows.sort((a, b) => (a.r.date_modified < b.r.date_modified ? 1 : -1));
+      results.replaceChildren(...(rows.length ? rows.slice(0, 40).map(({ k, spec, r }) => {
+        const st = r.payload.status || r.payload.stage;
+        return el('button', { class: 'result', type: 'button', onclick: () => { pop.remove(); onPick({ key: k, id: r.id, label: titleOf(spec, r) }); } },
+          icon(spec.icon), el('span', { class: 'pin-r-t' }, titleOf(spec, r), tab === 'all' ? el('small', {}, humanize(spec.single)) : null), st ? pill(st) : null);
+      }) : [el('p', { class: 'hint' }, 'Nothing matches.')]));
+    }
+    search.addEventListener('input', draw);
+    draw();
+    const pop = el('div', { class: 'pin-pop', role: 'dialog', 'aria-label': 'Pin a record' },
+      el('div', { class: 'pin-pop-head' }, el('b', {}, icon('pin'), 'Pin to message'), el('button', { class: 'icon-btn', type: 'button', 'aria-label': 'Close', onclick: () => pop.remove() }, icon('x'))),
+      el('div', { class: 'search' }, icon('search'), search), tabs, results);
+    $('#drawer').append(pop);
+    search.focus();
+  }
+
   // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
   const OUTCOME_STAGE = { 'Appointment set': 'Appointment set', 'Proposal sent': 'Proposal sent', Sold: 'Sold', 'Not interested': 'Lost' };
   function quickLog(spec, rec) {
@@ -1258,10 +1440,15 @@
       el('button', { class: 'btn ghost', onclick: closeDrawer }, 'Cancel'),
       saveBtn);
 
+    const canMsg = rec && byKey.messages && !['messages', 'feed', 'notepad', 'users'].includes(spec.key);
     showDrawer(
       el('div', { class: 'drawer-head' },
         el('div', {}, el('div', { class: 'eyebrow' }, isNew ? `New ${spec.single}` : labelOf(spec)),
           el('h2', { id: 'drawerTitle' }, isNew ? `New ${spec.single}` : titleOf(spec, rec))),
+        canMsg ? el('button', { class: 'btn sm msg-btn', type: 'button', title: 'Message a teammate about this', onclick: () => {
+          const resp = respOf(rec.payload);
+          openChat(resp && resp !== settings.meId ? resp : null, { key: spec.key, id: rec.id, label: titleOf(spec, rec) });
+        } }, icon('chat'), 'Message') : null,
         el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
       form, foot);
 
@@ -1406,6 +1593,10 @@
       ['projects', 'j7', { project_title: 'Ortiz — project', status: 'MPU planning', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(4), url_details: 'Panel is 100A, needs upgrade', contract_date: day(-20), ntp_m1_date: day(-15), mpu_required: true }],
       ['projects', 'j8', { project_title: 'Hughes — project', status: 'PTO', queue: Q(3), assigned_to: '@u3', project_type: 'Solar', date_due: day(-3), contract_date: day(-90), ntp_m1_date: day(-80), permit_approved_date: day(-60), install_date: day(-30), pto_date: day(-3) }],
 
+      ['messages', 'g1', { body: 'Can you confirm the crew for Patel on Thursday?', from_user: '@u1', to_user: '@u3', pin_key: 'projects', pin_id: '@j1', pin_label: 'Patel — project', seen: false }],
+      ['messages', 'g2', { body: 'On it. Crew is tentatively booked for 10am.', from_user: '@u3', to_user: '@u1', seen: true }],
+      ['messages', 'g3', { body: 'Nguyen asked about the battery again. Can you join the call tomorrow?', from_user: '@u2', to_user: '@u1', pin_key: 'deals', pin_id: '@d2', pin_label: 'Nguyen — 9.6 kW + battery', seen: false }],
+      ['messages', 'g4', { body: 'Kim’s monitoring is offline. Heading there after lunch.', from_user: '@u3', to_user: '@u2', pin_key: 'projects', pin_id: '@j2', pin_label: 'Kim — project', seen: false }],
       ['feed', 'f1', { body: 'Site survey is booked for Thursday 10am. Please confirm the crew.', about: 'Patel — project', about_key: 'projects', about_id: '@j1', author: '@u1', notify: '@u3', seen: false }],
       ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false }],
       ['feed', 'f3', { body: 'Monitoring shows offline since yesterday. Can you check the gateway on your visit?', about: 'Kim — project', about_key: 'projects', about_id: '@j2', author: '@u3', notify: '@u1', seen: false }],
@@ -1597,7 +1788,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 5;
+  const SAMPLE_VERSION = 6;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -2235,6 +2426,7 @@
     }
     const bell = el('button', { class: 'icon-btn bell-btn', id: 'bellBtn', 'aria-label': 'Notifications', onclick: openInbox }, icon('bell'));
     $('#themeBtn').before(bell);
+    document.body.append(el('button', { class: 'chat-fab', id: 'chatFab', type: 'button', 'aria-label': 'Team chat', onclick: () => openChat() }, icon('chat'), el('span', { class: 'fab-label' }, 'Chat')));
     const pill = $('#modePill');
     try {
       await api('GET', '/api/health');
