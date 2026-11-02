@@ -166,6 +166,18 @@
   const STEP_DATE = { Contract: 'contract_date', 'Revisions & NTP / M1': 'ntp_m1_date', 'Permit approved': 'permit_approved_date',
     'Install verification & post-install design': 'install_date', PTO: 'pto_date', M3: 'm3_date', Closed: 'closed_date' };
   const STATUS = 'CHOICE:' + INSTALL_STEPS.concat('Paused').join('|');
+  // Customer-facing milestones: only these send the homeowner an update (internal steps stay quiet)
+  const MAIN_DEFAULT = ['Contract', 'Pre-install', 'Design', 'Permit approved', 'Install scheduled', 'Install verification & post-install design', 'System activation & inspection', 'PTO'];
+  const MS_TPL = {
+    Contract: { label: 'Welcome', sms: 'Hi {first_name}, welcome to {company}! Your solar project is officially underway. I’ll text you at each big step. Reply STOP to opt out.', subject: 'Welcome! Your solar project is underway', email: 'Hi {first_name},\n\nWelcome aboard. Your solar project is officially underway, and we’ll keep you posted at each major step.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    'Pre-install': { label: 'Site survey', sms: 'Hi {first_name}, next up for your solar project is the site survey. We’ll confirm a day and time with you shortly. Reply STOP to opt out.', subject: 'Next step: your site survey', email: 'Hi {first_name},\n\nThe next step is a site survey of your home. We’ll reach out to confirm a day and time that works for you.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    Design: { label: 'Design ready', sms: 'Hi {first_name}, your solar system design is in progress. We’ll walk you through it before anything is final. Reply STOP to opt out.', subject: 'Your solar design', email: 'Hi {first_name},\n\nYour system design is in progress. We’ll review it with you before anything is finalized.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    'Permit approved': { label: 'Permit approved', sms: 'Good news {first_name}: your solar permit is approved! Next we’ll get your install on the calendar. Reply STOP to opt out.', subject: 'Your permit is approved', email: 'Hi {first_name},\n\nGood news: your permit is approved. Next we’ll schedule your installation.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    'Install scheduled': { label: 'Install scheduled', sms: 'Hi {first_name}, your solar install is on the calendar. We’ll confirm the date and what to expect. Reply STOP to opt out.', subject: 'Your install is scheduled', email: 'Hi {first_name},\n\nYour installation is on the calendar. We’ll confirm the date and walk you through what to expect on install day.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    'Install verification & post-install design': { label: 'Install complete', sms: 'Hi {first_name}, your panels are installed! Next up is the final inspection. Reply STOP to opt out.', subject: 'Your panels are installed', email: 'Hi {first_name},\n\nYour panels are installed. Next comes the final inspection and activation.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    'System activation & inspection': { label: 'Inspection & activation', sms: 'Hi {first_name}, we’re scheduling your system’s final inspection and activation. Almost there! Reply STOP to opt out.', subject: 'Final inspection and activation', email: 'Hi {first_name},\n\nWe’re scheduling your final inspection and system activation. You’re almost there.\n\n{rep_name}\n{company}\n{rep_phone}' },
+    PTO: { label: 'System is live', sms: 'Hi {first_name}, your solar system has permission to operate and is officially on! Reply STOP to opt out.', subject: 'Your solar system is on!', email: 'Hi {first_name},\n\nYour system has permission to operate and is officially on. Thanks for going solar with {company}.\n\n{rep_name}\n{company}\n{rep_phone}' }
+  };
   const STAGES = 'CHOICE:' + STAGE_LIST.join('|');
   const OUTCOMES = ['No answer', 'Left voicemail', 'Not home', 'Callback set', 'Appointment set', 'Proposal sent', 'Sold', 'Not interested'];
   const ACT_TYPES = ['Door knock', 'Call', 'Text', 'Email', 'Appointment', 'Follow-up visit'];
@@ -202,8 +214,9 @@
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'),
         f('owner', 'REF:@users', { label: 'Rep' }), f('source', 'CHOICE:Door knock|Cold call|Referral|Website|Event|Flyer|Existing customer|Other'),
         f('follow_up', 'DATE'), f('next_step', 'TEXT'), f('close_date', 'DATE'), f('notes', 'LONGTEXT'),
-        f('seq_status', 'CHOICE:Active|Paused|Done|Opted out', { label: 'Auto follow-up' }), f('seq_start', 'DATE', { label: 'Auto follow-up started' }), f('seq_step', 'NUMBER', { label: 'Auto follow-ups sent' })],
-      hide: ['seq_step'],
+        f('seq_status', 'CHOICE:Active|Paused|Done|Opted out', { label: 'Auto follow-up' }), f('seq_start', 'DATE', { label: 'Auto follow-up started' }), f('seq_step', 'NUMBER', { label: 'Auto follow-ups sent' }),
+        f('stage_since', 'DATE', { label: 'In current stage since' })],
+      hide: ['seq_step', 'stage_since'],
       title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'system_size_kw', 'financing', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
     { key: 'activities', table: 'Activities', label: 'Activities', single: 'activity', icon: 'phone', group: 'Sales',
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
@@ -228,7 +241,10 @@
         f('mpu_required', 'BOOLEAN', { label: 'MPU required' }), f('adders', 'LONGTEXT', { label: 'Adders (one per line)' }), f('adders_total', 'NUMBER', { label: 'Adders total ($)' }),
         // Monitoring
         f('monitoring_platform', 'TEXT', { label: 'Monitoring platform' }), f('monitoring_site_id', 'TEXT', { label: 'Site ID' }), f('monitoring_url', 'URL', { label: 'Monitoring link' }),
-        f('monitoring_status', 'CHOICE:Not set up|Online|Offline|Service needed', { label: 'Monitoring status' })],
+        f('monitoring_status', 'CHOICE:Not set up|Online|Offline|Service needed', { label: 'Monitoring status' }),
+        f('cust_pending', 'TEXT', { label: 'Customer update waiting' }), f('cust_notified', 'TEXT', { label: 'Customer updates sent' }),
+        f('stage_since', 'DATE', { label: 'In current step since' })],
+      hide: ['cust_pending', 'cust_notified', 'stage_since'],
       sections: [
         { title: 'Project', icon: 'sun', open: true, fields: ['project_title', 'status', 'assigned_to', 'queue', 'company', 'deal', 'project_type', 'date_due', 'url_details', 'notes'] },
         { title: 'Project milestones', icon: 'flag', fields: ['contract_date', 'ntp_m1_date', 'permit_approved_date', 'install_date', 'pto_date', 'm3_date', 'closed_date'],
@@ -664,7 +680,7 @@
       tile('calendar', 190, 'Calendar', apptsToday ? `${apptsToday} appt${apptsToday === 1 ? '' : 's'} today` : 'Appointments', '#/t/calendar', apptsToday || null),
       tile('home', 160, 'Homeowners', `${(cache.companies || []).length} on file`, '#/t/companies'),
       tile('sun', 42, 'Projects', `${open.filter((r) => r.payload.status !== 'Paused').length} active`, '#/t/projects'),
-      Object.assign(tile('send', 320, 'Autopilot', 'Auto follow-ups', openAutopilot), { id: 'apTile' }));
+      Object.assign(tile('send', 320, 'Autopilot', 'Follow-ups & updates', openAutopilot), { id: 'apTile' }));
 
     // ---- Customer journey: one path from first knock to PTO ----
     const salesSteps = STAGE_LIST.filter((x) => x !== 'Lost');
@@ -857,12 +873,16 @@
     if (p.location) { const l = (cache.locations || []).find((x) => x.id === p.location); if (l) return [l.payload.address, l.payload.city].filter(Boolean).join(', '); }
     return p.company ? addressIndex().get(p.company) || '' : '';
   }
+  // Whole days a deal / project has sat in its current stage
+  const localDay = (iso) => { const d = new Date(iso); return isNaN(d) ? todayISO() : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+  const daysInStage = (r) => Math.max(0, daysBetween(r.payload.stage_since ? String(r.payload.stage_since).slice(0, 10) : localDay(r.date_created), todayISO()));
   function sortChoices(spec) {
     const sch = schemaOf(spec);
     const out = [{ id: 'newest', label: 'Newest first', v: (r) => r.date_created, dir: -1 }, { id: 'oldest', label: 'Oldest first', v: (r) => r.date_created, dir: 1 }];
     const dateField = (spec.card && spec.card.due) || ['follow_up', 'date_due', 'date', 'close_date', 'received', 'date_sent'].find((k) => k in sch);
     if (dateField) out.push({ id: 'date', label: `Date (${fieldLabel(spec, dateField).replace(/\s*\(.*\)/, '')})`, v: (r) => r.payload[dateField] || null, dir: 1 });
     if (['address', 'company', 'location'].some((k) => k in sch) || spec.key === 'companies') out.push({ id: 'address', label: 'Address', v: (r) => addressOf(spec, r).replace(/^\d+\s+/, '').toLowerCase() || null, dir: 1 });
+    if (spec.boardField) out.push({ id: 'days', label: 'Days in current stage (longest)', v: daysInStage, dir: -1 });
     if ('system_size_kw' in sch) out.push({ id: 'size', label: 'System size (largest)', v: (r) => (r.payload.system_size_kw == null ? null : Number(r.payload.system_size_kw)), dir: -1 });
     const member = ['owner', 'assigned_to', 'rep', 'author', 'from_user'].find((k) => k in sch);
     if (member) out.push({ id: 'member', label: 'Team member', v: (r) => (r.payload[member] ? refLabel(typeOf(spec, member).target, r.payload[member]).toLowerCase() : null), dir: 1 });
@@ -931,6 +951,8 @@
         const total = c.value ? items.reduce((a, r) => a + (Number(r.payload[c.value]) || 0), 0) : null;
         const nx = stages[idx + 1];
         const next = !DONE.has(stage) && !terminal.has(stage) && nx && !terminal.has(nx) ? nx : null;
+        // One stage back: Lost reopens to Follow-up; Paused has no fixed previous step
+        const prev = stage === 'Lost' ? (stages.includes('Follow-up') ? 'Follow-up' : stages[0]) : stage === 'Paused' ? null : idx > 0 ? stages[idx - 1] : null;
         const list = el('div', { class: 'kcol-list' }, items.length ? items.map((r) => {
           const fu = c.due && r.payload[c.due];
           const late = fu && fu.slice(0, 10) < todayISO() && !DONE.has(stage);
@@ -941,12 +963,15 @@
               ondragend: (e) => e.currentTarget.classList.remove('dragging'),
               onclick: () => openRecord(spec, r), onkeydown: (e) => { if (e.key === 'Enter') openRecord(spec, r); } },
             el('div', { class: 'kcard-top' }, el('strong', {}, titleOf(spec, r)), c.value && r.payload[c.value] ? el('span', { class: 'kval' }, money(r.payload[c.value])) : null),
-            c.sub && r.payload[c.sub] ? el('div', { class: 'kmeta' }, refLabel(typeOf(spec, c.sub).target, r.payload[c.sub])) : null,
+            el('div', { class: 'kmeta' }, c.sub && r.payload[c.sub] ? refLabel(typeOf(spec, c.sub).target, r.payload[c.sub]) : null,
+              !DONE.has(stage) ? (() => { const d = daysInStage(r); return el('span', { class: 'kdays' + (d >= 14 ? ' stuck' : ''), title: `In ${stage} for ${d} day${d === 1 ? '' : 's'}` }, `${d}d in stage`); })() : null),
             c.note && r.payload[c.note] ? el('div', { class: 'kstep' }, r.payload[c.note]) : null,
             el('div', { class: 'kfoot' },
               DONE.has(stage) ? el('span', { class: 'kdue done' }, stage === 'Lost' ? 'Closed' : 'Done') :
                 fu ? el('span', { class: 'kdue' + (late ? ' late' : today ? ' today' : '') }, late ? 'Overdue · ' + fmtDate(fu) : today ? `${c.dueWord} today` : `${c.dueWord} ${fmtDate(fu)}`) : el('span', { class: 'kdue none' }, `No ${c.dueWord.toLowerCase()} date`),
               ownerName ? el('span', { class: 'kowner', title: ownerName }, initials(ownerName)) : null,
+              prev ? el('button', { class: 'knext kback', type: 'button', title: `Back to ${prev}`, 'aria-label': `Back to ${prev}`,
+                onclick: (e) => { e.stopPropagation(); moveStage(spec, r, field, prev, { back: true }); } }, icon('back')) : null,
               next ? el('button', { class: 'knext', type: 'button', title: `Move to ${next}`, 'aria-label': `Move to ${next}`,
                 onclick: (e) => { e.stopPropagation(); moveStage(spec, r, field, next); } }, icon('arrowR')) : null));
         }) : el('div', { class: 'kempty' }, `Nothing in ${stage}`));
@@ -984,14 +1009,30 @@
   }
   const initials = (name) => String(name).split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || '?';
 
-  async function moveStage(spec, rec, field, stage) {
+  async function moveStage(spec, rec, field, stage, opts = {}) {
     const patch = { [field]: stage };
+    if ('stage_since' in schemaOf(spec)) patch.stage_since = todayISO();
+    if (opts.back) {
+      // Going back: no customer messages, no milestone stamps, no new project; reopen a closed deal's follow-ups
+      if (spec.key === 'deals' && DONE.has(rec.payload.stage) && !DONE.has(stage)) { patch.close_date = null; if (rec.payload.seq_status === 'Done') patch.seq_status = 'Active'; }
+      if (spec.key === 'projects' && rec.payload.cust_pending) patch.cust_pending = null;
+      try {
+        await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
+        delete cache[spec.key];
+        await postChatter(spec, rec, `Moved back to ${stage}.`, respOf(rec.payload), true);
+        toast(`Moved back to ${stage}`);
+        await render();
+        refreshCounts();
+      } catch (e) { toast(e.message, true); }
+      return;
+    }
     if ((stage === 'Sold' || stage === 'Lost') && 'close_date' in schemaOf(spec) && !rec.payload.close_date) patch.close_date = todayISO();
     if (spec.key === 'deals') {
       const cfg = apCfg();
       if (DONE.has(stage)) patch.seq_status = 'Done';
       else if (cfg.stages.includes(stage) && !rec.payload.seq_start) Object.assign(patch, { seq_start: todayISO(), seq_status: 'Active', seq_step: 0 });
     }
+    if (spec.key === 'projects' && msCfg().on && msCfg().steps.includes(stage) && !String(rec.payload.cust_notified || '').split('|').includes(stage)) patch.cust_pending = stage;
     const stamp = spec.key === 'projects' && STEP_DATE[stage];
     if (stamp && stamp in schemaOf(spec) && !rec.payload[stamp]) patch[stamp] = todayISO();
     try {
@@ -1023,8 +1064,9 @@
     const extra = { contract_date: todayISO(), system_size_kw: d.system_size_kw, funding_source: d.financing, contract_value: d.value };
     Object.keys(extra).forEach((k) => { if (!(k in sch) || extra[k] === undefined || extra[k] === null || extra[k] === '') delete extra[k]; });
     const r = await api('POST', '/api/vault/insert-record', { registry_id: P.reg.id, payload: Object.assign(
-      { project_title: `${name} — project`, status: 'Contract', deal: deal.id, project_type: d.battery ? 'Solar + battery' : 'Solar', date_due: due },
+      { project_title: `${name} — project`, status: 'Contract', stage_since: todayISO(), deal: deal.id, project_type: d.battery ? 'Solar + battery' : 'Solar', date_due: due },
       extra, settings.queues[0] ? { queue: settings.queues[0] } : {}, d.company ? { company: d.company } : {}) });
+    if (msCfg().on && msCfg().steps.includes('Contract')) { try { await api('POST', '/api/vault/update-record', { registry_id: P.reg.id, record_id: r.record.id, payload: { cust_pending: 'Contract' } }); } catch (_) {} }
     await postChatter(P, r.record, `New project from sold deal ${d.deal_name || ''}. Starting at Contract.`.replace(/\s+\./, '.'), null, true);
     if (d.company && byKey.companies) {
       try { await api('POST', '/api/vault/update-record', { registry_id: byKey.companies.reg.id, record_id: d.company, payload: { status: 'Customer' } }); delete cache.companies; } catch (_) {}
@@ -1493,7 +1535,7 @@
       .filter(({ d, plan }) => plan.eligible && plan.next >= 0 && plan.dueOn <= today && !apContact(d).optedOut)
       .sort((a, b) => (a.plan.dueOn < b.plan.dueOn ? -1 : 1));
   }
-  async function apLoad() { await Promise.all([load(byKey.deals), load(byKey.contacts), load(byKey.companies), load(byKey.users)]); }
+  async function apLoad() { await Promise.all([load(byKey.deals), load(byKey.contacts), load(byKey.companies), load(byKey.users), load(byKey.projects)]); }
   async function apAdvance(deal, channel, step) {
     const cfg = apCfg();
     const p = deal.payload;
@@ -1547,20 +1589,26 @@
     const cfg = apCfg();
     const due = apDue();
     const list = el('div', { class: 'ap-list wide' });
+    const msList = el('div', { class: 'ap-list wide' });
     const draw = () => {
+      const again = () => setTimeout(() => { draw(); updateApBadge(); }, 400);
+      const ups = msDue();
+      msList.replaceChildren(...(ups.length ? ups.slice(0, 60).map((pr) => msCard(pr, again)) : [el('p', { class: 'hint', style: 'margin:0' }, 'No project updates waiting.')]));
       const now = apDue();
-      list.replaceChildren(...(now.length ? now.slice(0, 60).map(({ d, plan }) => apCard(d, plan, () => setTimeout(() => { draw(); updateApBadge(); }, 400)))
-        : [el('div', { class: 'empty', style: 'padding:24px' }, el('div', { class: 'empty-mark' }, icon('check')), el('h3', {}, 'All caught up'), el('p', {}, 'No automatic follow-ups are due right now.'))]));
+      list.replaceChildren(...(now.length ? now.slice(0, 60).map(({ d, plan }) => apCard(d, plan, again))
+        : [el('p', { class: 'hint', style: 'margin:0' }, 'No sales follow-ups due right now.')]));
     };
     draw();
     const active = (cache.deals || []).filter((d) => apPlan(d, cfg).eligible && apPlan(d, cfg).next >= 0).length;
     showDrawer(
       el('div', { class: 'drawer-head' },
-        el('div', {}, el('div', { class: 'eyebrow' }, cfg.on ? `Autopilot on · ${active} deals in sequence` : 'Autopilot off'), el('h2', { id: 'drawerTitle' }, 'Auto follow-ups')),
+        el('div', {}, el('div', { class: 'eyebrow' }, cfg.on ? `Autopilot on · ${active} deals in sequence` : 'Autopilot off'), el('h2', { id: 'drawerTitle' }, 'Autopilot')),
         el('button', { class: 'btn sm', type: 'button', onclick: openApSettings }, icon('sliders'), 'Set up'),
         el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
       el('div', { class: 'drawer-body' },
-        el('p', { class: 'hint wide', style: 'margin:0' }, `Open deals in ${cfg.stages.join(', ')} get a text and email on day ${cfg.days.join(', ')}. Each card is ready to send from your phone with the customer’s number, email and message filled in. It stops when the deal is sold or lost, or the customer opts out.`),
+        el('h3', { class: 'ap-sec wide' }, icon('sun'), 'Project updates', el('small', {}, 'Main steps after Sold')), msList,
+        el('h3', { class: 'ap-sec wide' }, icon('target'), 'Sales follow-ups', el('small', {}, `Day ${cfg.days.join(' / ')}`)),
+        el('p', { class: 'hint wide', style: 'margin:0' }, `Open deals in ${cfg.stages.join(', ')} get a text and email on day ${cfg.days.join(', ')}. It stops when the deal is sold or lost, or the customer opts out. Every card has the customer’s number, email and message filled in.`),
         list));
     void due;
   }
@@ -1577,7 +1625,13 @@
       subject: el('input', { class: 'input', value: t.subject }),
       email: el('textarea', { class: 'textarea', rows: 6, value: t.email })
     }));
+    const ms = msCfg();
+    const msOn = el('input', { type: 'checkbox', id: 'ms_on', checked: ms.on });
+    const msBoxes = INSTALL_STEPS.filter((st) => MS_TPL[st]).map((st) => { const b = el('input', { type: 'checkbox', value: st, checked: ms.steps.includes(st) }); return { b, row: el('label', { class: 'ap-stage' }, b, MS_TPL[st].label) }; });
+    const msIn = Object.fromEntries(Object.keys(MS_TPL).map((k) => [k, { sms: el('textarea', { class: 'textarea', rows: 3, value: ms.tpl[k].sms }), subject: el('input', { class: 'input', value: ms.tpl[k].subject }), email: el('textarea', { class: 'textarea', rows: 5, value: ms.tpl[k].email }) }]));
     const save = () => {
+      settings.milestones = { on: msOn.checked, steps: msBoxes.filter((x) => x.b.checked).map((x) => x.b.value),
+        tpl: Object.fromEntries(Object.entries(msIn).map(([k, t]) => [k, { sms: t.sms.value, subject: t.subject.value, email: t.email.value }])) };
       settings.autopilot = {
         on: on.checked, days: dayIn.map((x) => Number(x.value) || 7),
         stages: stageBoxes.filter((x) => x.b.checked).map((x) => x.b.value),
@@ -1589,10 +1643,11 @@
       updateApBadge();
     };
     showDrawer(
-      el('div', { class: 'drawer-head' }, el('div', {}, el('div', { class: 'eyebrow' }, 'Auto follow-ups'), el('h2', { id: 'drawerTitle' }, 'Set up autopilot')),
+      el('div', { class: 'drawer-head' }, el('div', {}, el('div', { class: 'eyebrow' }, 'Autopilot'), el('h2', { id: 'drawerTitle' }, 'Set up autopilot')),
         el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
       el('div', { class: 'drawer-body' },
-        el('div', { class: 'field set-row wide' }, el('label', { for: 'ap_on', style: 'font-weight:600' }, 'Autopilot on'), el('label', { class: 'toggle' }, on, el('i'))),
+        el('h3', { class: 'ap-sec wide' }, icon('target'), 'Sales follow-ups'),
+        el('div', { class: 'field set-row wide' }, el('label', { for: 'ap_on', style: 'font-weight:600' }, 'Day 7 / 15 / 30 follow-ups on'), el('label', { class: 'toggle' }, on, el('i'))),
         el('div', { class: 'field wide' }, el('span', {}, 'Send follow-ups on these days after the sequence starts'), el('div', { class: 'ap-days' }, dayIn.map((x, i) => el('label', {}, el('small', {}, `Follow-up ${i + 1}`), x)))),
         el('div', { class: 'field wide' }, el('span', {}, 'Run for deals in these stages'), el('div', { class: 'ap-stages' }, stageBoxes.map((x) => x.row))),
         el('p', { class: 'hint wide', style: 'margin:0' }, 'Fill-ins: {first_name} {last_name} {rep_name} {rep_first} {rep_phone} {company} {kw}'),
@@ -1602,9 +1657,16 @@
             el('label', { class: 'field wide' }, el('span', {}, 'Text message'), t.sms),
             el('label', { class: 'field wide' }, el('span', {}, 'Email subject'), t.subject),
             el('label', { class: 'field wide' }, el('span', {}, 'Email'), t.email)))),
+        el('h3', { class: 'ap-sec wide' }, icon('sun'), 'Project updates to the customer'),
+        el('div', { class: 'field set-row wide' }, el('label', { for: 'ms_on', style: 'font-weight:600' }, 'Send updates at main project steps'), el('label', { class: 'toggle' }, msOn, el('i'))),
+        el('div', { class: 'field wide' }, el('span', {}, 'Main steps (internal steps like PIR, MPU planning, utility pre-check and M3 never message the customer)'), el('div', { class: 'ap-stages' }, msBoxes.map((x) => x.row))),
+        Object.entries(msIn).map(([k, t]) => el('details', { class: 'fsec wide' },
+          el('summary', {}, el('span', { class: 'fsec-ic' }, icon('send')), el('b', {}, MS_TPL[k].label)),
+          el('div', { class: 'fsec-body' }, el('label', { class: 'field wide' }, el('span', {}, 'Text message'), t.sms),
+            el('label', { class: 'field wide' }, el('span', {}, 'Email subject'), t.subject), el('label', { class: 'field wide' }, el('span', {}, 'Email'), t.email)))),
         el('div', { class: 'ap-legal wide' }, icon('flag'), el('div', {},
           el('b', {}, 'Texting rules'), el('p', {}, 'Only text customers who agreed to receive texts (turn on “OK to text” on their contact). Honor any opt-out right away: replies like STOP, QUIT, END, CANCEL or UNSUBSCRIBE, or “Opted out” on the contact, stop the sequence. Rules vary by state; check with your attorney before sending marketing texts.')))),
-      el('div', { class: 'drawer-foot' }, el('button', { class: 'btn ghost', onclick: () => { settings.autopilot = undefined; saveSettings(); openApSettings(); } }, 'Reset messages'), el('span', { class: 'spacer' }),
+      el('div', { class: 'drawer-foot' }, el('button', { class: 'btn ghost', onclick: () => { settings.autopilot = undefined; settings.milestones = undefined; saveSettings(); openApSettings(); } }, 'Reset messages'), el('span', { class: 'spacer' }),
         el('button', { class: 'btn ghost', onclick: openAutopilot }, 'Cancel'), el('button', { class: 'btn primary', onclick: save }, 'Save')));
   }
   function apTimeline(deal) {
@@ -1632,11 +1694,89 @@
         deal.payload.seq_status === 'Paused' ? btn('Resume', { seq_status: 'Active' }) : plan.next >= 0 && plan.eligible ? btn('Pause', { seq_status: 'Paused' }) : null,
         btn('Restart', { seq_status: 'Active', seq_step: 0, seq_start: today })));
   }
+  // ---------- Customer milestone updates (projects) ----------
+  const msCfg = () => {
+    const c = settings.milestones || {};
+    const steps = Array.isArray(c.steps) ? c.steps.filter((x) => MS_TPL[x]) : MAIN_DEFAULT.slice();
+    const tpl = {};
+    Object.keys(MS_TPL).forEach((k) => { tpl[k] = Object.assign({}, MS_TPL[k], (c.tpl || {})[k] || {}); });
+    return { on: c.on !== false, steps, tpl };
+  };
+  function projectContact(proj) {
+    const p = proj.payload;
+    const deal = p.deal && (cache.deals || []).find((d) => d.id === p.deal);
+    if (deal) return { who: apContact(deal), deal };
+    const c = (cache.contacts || []).find((x) => p.company && x.payload.company === p.company);
+    const h = p.company && (cache.companies || []).find((x) => x.id === p.company);
+    const household = h ? String(h.payload.company_name || '').replace(/\s+Household$/i, '') : String(p.project_title || '').split(' — ')[0];
+    return { who: { first: (c && c.payload.first_name) || household.split(' ')[0] || 'there', last: (c && c.payload.last_name) || '',
+      phone: (c && c.payload.phone) || (h && h.payload.phone) || '', email: (c && c.payload.email) || '', consent: !!(c && c.payload.text_consent), optedOut: !!(c && c.payload.opted_out) }, deal: null };
+  }
+  function msDue() {
+    const cfg = msCfg();
+    if (!cfg.on) return [];
+    return (cache.projects || []).filter((r) => r.payload.cust_pending && cfg.steps.includes(r.payload.cust_pending) && !projectContact(r).who.optedOut)
+      .sort((a, b) => (a.date_modified < b.date_modified ? 1 : -1));
+  }
+  async function msDone(proj, channel) {
+    const p = proj.payload;
+    const step = p.cust_pending;
+    const sent = String(p.cust_notified || '').split('|').filter(Boolean);
+    if (!sent.includes(step)) sent.push(step);
+    const patch = { cust_pending: null, cust_notified: sent.join('|') };
+    await api('POST', '/api/vault/update-record', { registry_id: byKey.projects.reg.id, record_id: proj.id, payload: patch });
+    delete p.cust_pending; p.cust_notified = patch.cust_notified;
+    if (channel !== 'Skip') {
+      try {
+        await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
+          { subject: `Customer update: ${MS_TPL[step] ? MS_TPL[step].label : step} — ${channel}`, type: channel, outcome: 'Note', date: todayISO() },
+          p.deal ? { deal: p.deal } : {}, p.company ? { company: p.company } : {}, settings.meId ? { rep: settings.meId } : {}) });
+        delete cache.activities;
+      } catch (_) {}
+    }
+  }
+  function msCard(proj, onDone) {
+    const cfg = msCfg();
+    const step = proj.payload.cust_pending;
+    const t = cfg.tpl[step];
+    const { who, deal } = projectContact(proj);
+    const fake = deal || { payload: { owner: proj.payload.assigned_to } };
+    const sms = apFill(t.sms, fake, who), subject = apFill(t.subject, fake, who), body = apFill(t.email, fake, who);
+    const phone = String(who.phone).replace(/[^\d+]/g, '');
+    let done = false;
+    const mark = async (ch, btn) => { btn.classList.add('done'); btn.querySelector('span').textContent = ch === 'Text' ? 'Text opened' : 'Email opened'; if (!done) { done = true; await msDone(proj, ch); if (onDone) onDone(); } };
+    return el('article', { class: 'ap-card' },
+      el('div', { class: 'ap-top' },
+        el('span', { class: 'ap-day ms' }, t.label),
+        el('div', { class: 'ap-who' }, el('b', {}, titleOf(byKey.projects, proj)), el('small', {}, [who.first + (who.last ? ' ' + who.last : ''), step].join(' · '))),
+        el('span', { class: 'kdue today' }, 'Ready')),
+      el('details', { class: 'ap-preview' }, el('summary', {}, 'Preview message'), el('p', {}, sms), el('p', { class: 'ap-email' }, el('b', {}, subject), el('br'), body)),
+      el('div', { class: 'ap-actions' },
+        phone && who.consent ? el('a', { class: 'btn primary sm', href: `sms:${phone}?&body=${encodeURIComponent(sms)}`, onclick: (e) => mark('Text', e.currentTarget) }, icon('chat'), el('span', {}, 'Send text'))
+          : el('span', { class: 'ap-off' }, icon('chat'), phone ? 'No text consent' : 'No phone'),
+        who.email ? el('a', { class: 'btn sm', href: `mailto:${who.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`, onclick: (e) => mark('Email', e.currentTarget) }, icon('mail2'), el('span', {}, 'Send email'))
+          : el('span', { class: 'ap-off' }, icon('mail2'), 'No email'),
+        el('button', { class: 'btn ghost sm', type: 'button', onclick: async (e) => { e.currentTarget.disabled = true; await msDone(proj, 'Skip'); if (onDone) onDone(); toast('Skipped this update'); } }, 'Skip'),
+        el('a', { class: 'btn ghost sm', href: `#/t/projects?open=${proj.id}`, onclick: closeDrawer }, 'Open project')));
+  }
+  function msTimeline(proj) {
+    const cfg = msCfg();
+    const sent = String(proj.payload.cust_notified || '').split('|');
+    const at = INSTALL_STEPS.indexOf(proj.payload.status);
+    return el('div', { class: 'ap-timeline wide ms-timeline' },
+      el('h3', {}, icon('send'), 'Customer updates', el('small', {}, cfg.on ? 'Main steps only' : 'Off')),
+      el('div', { class: 'ms-steps' }, cfg.steps.map((st) => {
+        const state = proj.payload.cust_pending === st ? 'due' : sent.includes(st) ? 'sent' : INSTALL_STEPS.indexOf(st) < at ? 'missed' : 'upcoming';
+        return el('span', { class: 'ms-step ' + state, title: state === 'sent' ? 'Sent' : state === 'due' ? 'Ready to send' : state === 'missed' ? 'Passed without an update' : 'Upcoming' },
+          state === 'sent' ? icon('check') : null, cfg.tpl[st].label);
+      })));
+  }
+
   async function updateApBadge() {
     const t = $('#apTile');
     if (!t) return;
     try { await apLoad(); } catch (_) { return; }
-    const n = apDue().length;
+    const n = apDue().length + msDue().length;
     const art = t.querySelector('.qart');
     const old = art.querySelector('.qbadge'); if (old) old.remove();
     if (n) art.append(el('span', { class: 'qbadge' }, n > 99 ? '99+' : n));
@@ -1664,7 +1804,7 @@
         if (to && to !== 'Lost' && to !== 'Sold' && STAGE_LIST.indexOf(to) <= cur) to = null;
         if (DONE.has(p.stage)) to = null;
         const patch = {};
-        if (to) patch.stage = to;
+        if (to) { patch.stage = to; patch.stage_since = todayISO(); }
         if (to === 'Sold' || to === 'Lost') { patch.close_date = todayISO(); patch.seq_status = 'Done'; }
         else if (to && apCfg().stages.includes(to) && !p.seq_start) Object.assign(patch, { seq_start: todayISO(), seq_status: 'Active', seq_step: 0 });
         if (outcome === 'Not interested') patch.seq_status = 'Done';
@@ -1802,6 +1942,7 @@
       errorBox,
       rec && spec.key === 'deals' && byKey.activities ? quickLog(spec, rec) : null,
       rec && spec.key === 'deals' ? (await apLoad(), apTimeline(rec)) : null,
+      rec && spec.key === 'projects' ? (await apLoad(), msTimeline(rec)) : null,
       rec && !['feed', 'notepad'].includes(spec.key) ? await chatterSection(spec, rec) : null,
       layoutFields(fields.map((k) => {
         const t = typeOf(spec, k);
@@ -1869,6 +2010,10 @@
       errorBox.hidden = true;
       try {
         const payload = collect();
+        if (spec.boardField && 'stage_since' in schemaOf(spec) && payload[spec.boardField] && payload[spec.boardField] !== (rec ? rec.payload[spec.boardField] : undefined)) payload.stage_since = todayISO();
+        else if (rec && rec.payload.stage_since) payload.stage_since = rec.payload.stage_since;
+        if (spec.key === 'projects' && payload.status && payload.status !== (rec ? rec.payload.status : undefined) && msCfg().on && msCfg().steps.includes(payload.status)
+          && !String(rec ? rec.payload.cust_notified || '' : '').split('|').includes(payload.status)) payload.cust_pending = payload.status;
         let saved;
         if (isNew) saved = (await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload })).record;
         else saved = (await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload })).record;
@@ -2138,7 +2283,7 @@
     const dealIds = await bulk('deals', dealJobs.map((j) => {
       const closed = j.stage === 'Sold' || j.stage === 'Lost';
       return Object.assign({ deal_name: `${j.name.split(' ')[1]} — ${j.kw} kW`, stage: j.stage, value: j.value, system_size_kw: j.kw, financing: j.fin, battery: j.battery,
-        company: j.home, contact: j.contact, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
+        stage_since: day(-between(0, 24)), company: j.home, contact: j.contact, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
         closed ? { close_date: day(-between(0, 25)), seq_status: 'Done' } : { follow_up: day(between(-6, 12)) },
         ['Follow-up', 'Appointment set', 'Proposal sent'].includes(j.stage) ? (() => {
           const age = between(0, 40); const passed = [7, 15, 30].filter((d) => d <= age).length;
@@ -2159,7 +2304,7 @@
     await bulk('projects', projJobs.map((j) => {
       const age = order.indexOf(j.step) < 0 ? between(10, 60) : order.indexOf(j.step) * 6 + between(2, 10);
       const live = reached(j, 'PTO');
-      const p = { project_title: `${j.name.split(' ')[1]} — project`, status: j.step, queue: settings.queues[Math.min(4, Math.floor(Math.max(0, order.indexOf(j.step)) / 4))] || undefined,
+      const p = { project_title: `${j.name.split(' ')[1]} — project`, status: j.step, stage_since: day(-between(0, 21)), queue: settings.queues[Math.min(4, Math.floor(Math.max(0, order.indexOf(j.step)) / 4))] || undefined,
         assigned_to: pick(coords), company: j.home, project_type: j.battery ? 'Solar + battery' : 'Solar', date_due: day(between(-5, 14)), url_details: STATUS_NOTE[j.step],
         contract_date: day(-age), system_size_kw: j.kw, panel_count: Math.round(j.kw * 1000 / 400), panel_model: 'Sample 400W mono panel', inverter: pick(['Sample microinverters', 'Sample string inverter']),
         funding_source: j.fin, contract_value: j.value, mpu_required: reached(j, 'MPU planning') ? rnd() < 0.3 : rnd() < 0.15 };
@@ -2170,6 +2315,11 @@
       if (live) { p.pto_date = day(-age + 45); p.monitoring_status = rnd() < 0.85 ? 'Online' : pick(['Offline', 'Service needed']); p.monitoring_platform = 'Sample monitoring app'; p.monitoring_site_id = 'SAMPLE-' + between(1000, 9999); }
       if (reached(j, 'M3')) p.m3_date = day(-age + 52);
       if (reached(j, 'Closed')) p.closed_date = day(-age + 56);
+      { const main = MAIN_DEFAULT.filter((m) => order.indexOf(m) <= order.indexOf(j.step) && order.indexOf(j.step) >= 0);
+        const pend = MAIN_DEFAULT.includes(j.step) && rnd() < 0.6 ? j.step : null;
+        const sentList = main.filter((m) => m !== pend);
+        if (sentList.length) p.cust_notified = sentList.join('|');
+        if (pend) p.cust_pending = pend; }
       if (rnd() < 0.2) { p.adders = pick(['Critter guard', 'Trenching', 'Roof reinforcement', 'Critter guard\nEV-ready circuit']); p.adders_total = between(4, 30) * 100; }
       Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
       return p;
@@ -2253,7 +2403,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 11;
+  const SAMPLE_VERSION = 13;
 
   // ---------------------------------------------------------------------
   // New table builder

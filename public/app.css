@@ -1030,3 +1030,27 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0 6px; font
 .pin-people label:has(input:checked) { background: hsl(42 90% 55% / .18); box-shadow: inset 0 0 0 1px hsl(42 90% 55% / .55); }
 .post-pinpick { display: grid; gap: 8px; padding: 10px; border-radius: 14px; background: var(--glass-3); box-shadow: inset 0 0 0 1px hsl(42 90% 55% / .35); }
 .post-pinpick .actions-row { justify-content: flex-end; }
+
+/* Customer milestone updates */
+.ap-sec { display: flex; align-items: center; gap: 8px; margin: 8px 0 0; font: 700 15px var(--f-display); }
+.ap-sec .i { width: 17px; height: 17px; color: var(--red-hot); }
+.ap-sec small { margin-left: auto; font: 600 12px var(--f-body); color: var(--muted); }
+.ap-day.ms { background: linear-gradient(135deg, hsl(150 65% 42%), hsl(190 70% 40%)); }
+.ms-steps { display: flex; flex-wrap: wrap; gap: 6px; }
+.ms-step { display: inline-flex; align-items: center; gap: 5px; padding: 6px 10px; border-radius: 99px; font-size: 12.5px; font-weight: 600; background: var(--glass); color: var(--muted); box-shadow: inset 0 0 0 1px var(--edge); }
+.ms-step .i { width: 13px; height: 13px; }
+.ms-step.sent { color: hsl(150 60% 60%); background: hsl(150 60% 40% / .14); }
+.ms-step.due { color: #fff; background: var(--warn); box-shadow: none; }
+.ms-step.missed { opacity: .55; text-decoration: line-through; }
+:root[data-theme="light"] .ms-step.sent { color: hsl(150 65% 28%); }
+
+/* Back one stage */
+.knext.kback { background: var(--glass-3); color: var(--text); box-shadow: inset 0 0 0 1px var(--edge-strong); }
+.knext.kback:hover { background: var(--glass-2); }
+.kowner + .kback, .kfoot .kback { margin-left: 0; }
+
+/* Days in stage on cards */
+.kmeta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.kdays { font: 600 11px var(--f-body); color: var(--muted); padding: 1px 7px; border-radius: 99px; background: var(--glass-3); }
+.kdays.stuck { color: hsl(35 95% 62%); background: hsl(35 95% 55% / .14); }
+:root[data-theme="light"] .kdays.stuck { color: hsl(30 90% 34%); }
