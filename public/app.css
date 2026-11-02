@@ -1054,3 +1054,12 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0 6px; font
 .kdays { font: 600 11px var(--f-body); color: var(--muted); padding: 1px 7px; border-radius: 99px; background: var(--glass-3); }
 .kdays.stuck { color: hsl(35 95% 62%); background: hsl(35 95% 55% / .14); }
 :root[data-theme="light"] .kdays.stuck { color: hsl(30 90% 34%); }
+
+/* Activity visibility */
+.vis { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 99px; font: 600 11.5px var(--f-body); background: var(--glass-3); color: var(--muted); }
+.vis-team { color: hsl(200 80% 68%); background: hsl(200 80% 50% / .14); }
+.vis-private { color: hsl(35 95% 62%); background: hsl(35 95% 55% / .14); }
+:root[data-theme="light"] .vis-team { color: hsl(205 80% 32%); }
+:root[data-theme="light"] .vis-private { color: hsl(30 90% 34%); }
+
+.sort-wrap > span { white-space: nowrap; }

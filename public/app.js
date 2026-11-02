@@ -220,8 +220,9 @@
       title: (p) => p.deal_name, columns: ['deal_name', 'stage', 'system_size_kw', 'financing', 'company', 'owner', 'follow_up', 'next_step'], sort: { field: 'follow_up', dir: 1 } },
     { key: 'activities', table: 'Activities', label: 'Activities', single: 'activity', icon: 'phone', group: 'Sales',
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
-        f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
-      title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date'], sort: { field: 'date', dir: -1 } },
+        f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT'),
+        f('visible_to', 'TEXT', { ui: 'audience', label: 'Visible to' })],
+      title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date', 'visible_to'], sort: { field: 'date', dir: -1 } },
     { key: 'projects', table: 'Projects', label: 'Projects', single: 'project', icon: 'sun', group: 'Projects', view: 'board', boardField: 'status',
       card: { due: 'date_due', dueWord: 'Due', owner: 'assigned_to', sub: 'company', note: 'url_details', value: null, stepOffset: 5 },
       fields: [f('project_title', 'TEXT', { label: 'Project' }), f('status', STATUS, { label: 'Step' }), f('queue', 'TEXT', { ui: 'queue', label: 'Team' }), f('assigned_to', 'REF:@users', { label: 'Responsible' }),
@@ -455,6 +456,7 @@
 
   function display(spec, field, rec) {
     const v = rec.payload[field];
+    if (field === 'visible_to' && spec.key === 'activities') return el('span', { class: 'vis vis-' + String(v || 'all').split(':')[0] }, visLabel(v));
     if (v === undefined || v === null || v === '') return null;
     const t = typeOf(spec, field);
     switch (t.base) {
@@ -815,7 +817,20 @@
     // List view
     const body = el('div', { class: 'card grid-card reveal' });
     const searchInput = el('input', { class: 'input', type: 'search', placeholder: `Search ${label.toLowerCase()}`, value: st.q, 'aria-label': 'Search' });
-    const base = queue ? recs.filter((r) => r.payload.queue === queue) : recs;
+    let base = queue ? recs.filter((r) => r.payload.queue === queue) : recs;
+    let teamCtl = null;
+    if (spec.key === 'activities') {
+      base = base.filter(canSeeActivity);
+      const roles = [...new Set((cache.users || []).map((u) => u.payload.role).filter(Boolean))];
+      if (st.team) base = base.filter((r) => { const u = userRec(r.payload.rep); return u && u.payload.role === st.team; });
+      const teamSel = el('select', { class: 'select sort-sel', 'aria-label': 'Team' }, el('option', { value: '' }, 'All teams'), roles.map((r) => el('option', { value: r, selected: st.team === r }, teamLabel(r))));
+      teamSel.addEventListener('change', () => { st.team = teamSel.value; render(); });
+      const defSel = el('select', { class: 'select sort-sel', 'aria-label': 'New activities visible to' },
+        [['all', 'Everyone'], ...roles.map((r) => ['team:' + r, teamLabel(r)]), ['private', 'Private']].map(([v, l]) => el('option', { value: v, selected: actDefault() === v }, l)));
+      defSel.addEventListener('change', () => { settings.actDefault = defSel.value; saveSettings(); toast(`New activities visible to ${visLabel(defSel.value).toLowerCase()}`); });
+      teamCtl = [el('label', { class: 'sort-wrap' }, icon('users'), el('span', {}, 'Team'), teamSel),
+        el('label', { class: 'sort-wrap' }, icon('pin'), el('span', {}, 'New visible to'), defSel)];
+    }
     const chips = chipField ? el('div', { class: 'chips', role: 'group', 'aria-label': fieldLabel(spec, chipField) },
       el('button', { class: 'chip', 'aria-pressed': String(!st.chip), onclick: () => { st.chip = ''; draw(); syncChips(); } }, 'All', el('span', { class: 'n' }, base.length)),
       typeOf(spec, chipField).options.map((o) => {
@@ -829,6 +844,7 @@
     const toolbar = el('div', { class: 'toolbar reveal' },
       el('div', { class: 'search' }, icon('search'), searchInput),
       sortSelect(spec, st, 'newest', () => { st.sort = null; draw(); }),
+      teamCtl,
       queue ? el('button', { class: 'chip', 'aria-pressed': 'true', onclick: () => go('#/t/' + spec.key), title: 'Clear queue filter' }, `Queue: ${queue}  ×`) : null,
       chips);
 
@@ -1162,6 +1178,21 @@
     const names = a.slice(6).split(',').map((id) => (userName(id) || 'Teammate').split(' ')[0]);
     return names.length > 3 ? `${names.slice(0, 3).join(', ')} +${names.length - 3}` : names.join(', ');
   }
+  // Activity visibility: 'all' | 'team:<role>' | 'private'. The rep and Admins always see their own.
+  const actDefault = () => settings.actDefault || 'all';
+  const actVis = () => (actDefault() !== 'all' ? { visible_to: actDefault() } : {});
+  function canSeeActivity(r) {
+    const a = r.payload.visible_to || 'all';
+    if (a === 'all') return true;
+    const me = settings.meId;
+    if (!me) return false;
+    if (r.payload.rep === me) return true;
+    const u = userRec(me);
+    if (u && u.payload.role === 'Admin') return true;
+    if (a.startsWith('team:')) return !!u && u.payload.role === a.slice(5);
+    return false;
+  }
+  const visLabel = (a) => (!a || a === 'all' ? 'Everyone' : a === 'private' ? 'Private' : teamLabel(a.slice(5)));
   function canSeePin(post) {
     const p = post.payload;
     if (!p.pinned) return false;
@@ -1554,7 +1585,7 @@
     }
     try {
       await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
-        { subject: `Day ${cfg.days[step]} auto follow-up — ${channel}`, type: channel, outcome: 'Note', deal: deal.id, date: todayISO() },
+        { subject: `Day ${cfg.days[step]} auto follow-up — ${channel}`, type: channel, outcome: 'Note', deal: deal.id, date: todayISO() }, actVis(),
         p.company ? { company: p.company } : {}, p.contact ? { contact: p.contact } : {}, settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}) });
       delete cache.activities;
     } catch (_) {}
@@ -1734,7 +1765,7 @@
     if (channel !== 'Skip') {
       try {
         await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
-          { subject: `Customer update: ${MS_TPL[step] ? MS_TPL[step].label : step} — ${channel}`, type: channel, outcome: 'Note', date: todayISO() },
+          { subject: `Customer update: ${MS_TPL[step] ? MS_TPL[step].label : step} — ${channel}`, type: channel, outcome: 'Note', date: todayISO() }, actVis(),
           p.deal ? { deal: p.deal } : {}, p.company ? { company: p.company } : {}, settings.meId ? { rep: settings.meId } : {}) });
         delete cache.activities;
       } catch (_) {}
@@ -1800,7 +1831,7 @@
       const p = rec.payload;
       try {
         await api('POST', '/api/vault/insert-record', { registry_id: byKey.activities.reg.id, payload: Object.assign(
-          { subject: `${type.value} — ${outcome}`, type: type.value, outcome, deal: rec.id, date: todayISO() },
+          { subject: `${type.value} — ${outcome}`, type: type.value, outcome, deal: rec.id, date: todayISO() }, actVis(),
           p.company ? { company: p.company } : {}, p.contact ? { contact: p.contact } : {},
           settings.meId || p.owner ? { rep: settings.meId || p.owner } : {}, note.value.trim() ? { notes: note.value.trim() } : {}) });
         const cur = STAGE_LIST.indexOf(p.stage || STAGE_LIST[0]);
@@ -1912,6 +1943,14 @@
     const t = typeOf(spec, field);
     const h = hintOf(spec, field);
     const id = 'f_' + field;
+    if (h.ui === 'audience') {
+      const roles = [...new Set((cache.users || []).map((u) => u.payload.role).filter(Boolean))];
+      const v = value || actDefault();
+      return el('select', { class: 'select', id, name: field },
+        el('option', { value: 'all', selected: v === 'all' }, 'Everyone'),
+        roles.length ? el('optgroup', { label: 'One team (plus the rep)' }, roles.map((r) => el('option', { value: 'team:' + r, selected: v === 'team:' + r }, teamLabel(r)))) : null,
+        el('option', { value: 'private', selected: v === 'private' }, 'Private (just the rep)'));
+    }
     if (h.ui === 'queue') {
       const opts = settings.queues.includes(value) || !value ? settings.queues : [...settings.queues, value];
       return el('select', { class: 'select', id, name: field }, el('option', { value: '' }, 'No queue'), opts.map((o) => el('option', { value: o, selected: o === value }, o)));
@@ -2065,7 +2104,7 @@
         const t = typeOf(s, k);
         if (t.base !== 'REF' || t.target !== spec.reg.id) continue;
         await load(s);
-        const hits = cache[s.key].filter((r) => r.payload[k] === rec.id);
+        const hits = cache[s.key].filter((r) => r.payload[k] === rec.id && (s.key !== 'activities' || canSeeActivity(r)));
         groups.push(el('div', {},
           el('h3', {}, `${labelOf(s)}${Object.keys(schemaOf(s)).filter((x) => typeOf(s, x).target === spec.reg.id).length > 1 ? ` · ${fieldLabel(s, k)}` : ''}`, el('span', {}, hits.length)),
           hits.slice(0, 8).map((r) => el('button', { class: 'result', type: 'button', onclick: () => openRecord(s, r) }, icon(s.icon), titleOf(s, r),
@@ -2336,7 +2375,8 @@
       ['Call', 'Callback set'], ['Appointment', 'Proposal sent'], ['Appointment', 'Sold'], ['Text', 'Callback set']];
     await bulk('activities', Array.from({ length: between(30, 40) }, () => {
       const j = pick(recent); const [type, outcome] = pick(OUT);
-      return { subject: `${type} — ${outcome}`, type, outcome, deal: j.id, company: j.home, rep: pick(reps), date: day(-between(0, 6)) };
+      const vis = rnd(); return Object.assign({ subject: `${type} — ${outcome}`, type, outcome, deal: j.id, company: j.home, rep: pick(reps), date: day(-between(0, 6)) },
+        vis < 0.15 ? { visible_to: 'team:Closer' } : vis < 0.25 ? { visible_to: 'team:Setter' } : vis < 0.3 ? { visible_to: 'private' } : {});
     }));
     await bulk('calendar', Array.from({ length: between(4, 6) }, () => {
       const j = pick(dealJobs.filter((x) => x.stage === 'Appointment set'));
@@ -2408,7 +2448,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 13;
+  const SAMPLE_VERSION = 14;
 
   // ---------------------------------------------------------------------
   // New table builder
