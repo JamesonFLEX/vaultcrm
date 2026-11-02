@@ -1044,11 +1044,15 @@
     const F = byKey.feed;
     if (!F || !rec || spec.key === 'feed' || !String(body || '').trim()) return null;
     const payload = { body: String(body).trim().slice(0, 9000), about: titleOf(spec, rec), about_key: spec.key, about_id: rec.id, seen: false };
-    if (settings.meId) payload.author = settings.meId;
+    await load(byKey.users);
+    if (settings.meId && !userRec(settings.meId)) await ensureMe();
+    if (settings.meId && userRec(settings.meId)) payload.author = settings.meId;
+    if (notify && !userRec(notify)) notify = null;
     if (notify && notify !== settings.meId) payload.notify = notify;
     if (auto && !payload.notify) return null; // automatic posts only when someone needs to act
-    if (extra && extra.pinned) { payload.pinned = true; payload.pin_audience = extra.pinned === true ? 'all' : extra.pinned; if (settings.meId) payload.pinned_by = settings.meId; }
-    try { const r = await api('POST', '/api/vault/insert-record', { registry_id: F.reg.id, payload }); delete cache.feed; return r.record; } catch (_) { return null; }
+    if (extra && extra.pinned) { payload.pinned = true; payload.pin_audience = extra.pinned === true ? 'all' : extra.pinned; if (payload.author) payload.pinned_by = payload.author; }
+    try { const r = await api('POST', '/api/vault/insert-record', { registry_id: F.reg.id, payload }); delete cache.feed; return r.record; }
+    catch (e) { if (!auto) toast('Couldn’t post that note: ' + (e.details ? [].concat(e.details).join('; ') : e.message), true); return null; }
   }
   function shareLinks(post) {
     const u = userRec(post.payload.notify);
@@ -1173,7 +1177,7 @@
       btn.disabled = true;
       const made = await postChatter(spec, rec, text.value, who.value || null, false, { pinned: pinner.value() });
       btn.disabled = false;
-      if (!made) { toast('Couldn’t post that note', true); return; }
+      if (!made) return;
       text.value = ''; pinner.reset();
       posts.push(made); redraw();
       toast((made.payload.pinned ? `Pinned for ${audienceLabel(made.payload.pin_audience)}` : 'Posted') + (made.payload.notify ? ` · ${userName(made.payload.notify)} notified` : ''));
@@ -1236,6 +1240,7 @@
       if (!body) { text.focus(); return; }
       btn.disabled = true;
       const payload = { body: body.slice(0, 9000), about: 'Team update', seen: true };
+      await ensureMe();
       if (settings.meId) payload.author = settings.meId;
       const aud = pinner.value();
       if (aud) { payload.pinned = true; payload.pin_audience = aud; if (settings.meId) payload.pinned_by = settings.meId; }
@@ -1288,6 +1293,7 @@
     await loadChat();
     if (withId !== undefined) chatState.with = withId;
     if (pin !== undefined) chatState.pin = pin;
+    await ensureMe();
     if (!settings.meId) return chatWhoAmI();
     return chatState.with ? chatThread() : chatList();
   }
@@ -1303,7 +1309,7 @@
     showDrawer(chatHead('Team chat', 'Messages'),
       el('div', { class: 'drawer-body' },
         el('p', { class: 'hint wide', style: 'margin:0' }, 'Who are you? Chat needs to know who’s sending.'),
-        el('div', { class: 'people wide' }, users.map((u) => el('button', { class: 'person', type: 'button', onclick: () => { settings.meId = u.id; settings.name = (u.payload.name || '').split(' ')[0]; saveSettings(); openChat(); render(); } },
+        el('div', { class: 'people wide' }, users.map((u) => el('button', { class: 'person', type: 'button', onclick: () => { settings.meId = u.id; settings.meName = u.payload.name || ''; settings.name = (u.payload.name || '').split(' ')[0]; saveSettings(); openChat(); render(); } },
           el('span', { class: 'post-av' }, initials(u.payload.name || '?')), el('span', {}, el('b', {}, u.payload.name || 'Teammate'), el('small', {}, u.payload.role || '')))))));
   }
   function chatList() {
@@ -2070,7 +2076,6 @@
     const pick = (a) => a[Math.floor(rnd() * a.length)];
     const between = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
     const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
-    const howMany = () => between(23, 37);
     const FIRST = ['Ava', 'Ben', 'Carla', 'Diego', 'Elena', 'Frank', 'Grace', 'Hector', 'Iris', 'Jamal', 'Kara', 'Leo', 'Maya', 'Noah', 'Olivia', 'Pedro', 'Quinn', 'Rosa', 'Sean', 'Tara',
       'Uma', 'Victor', 'Wendy', 'Xavier', 'Yvonne', 'Zack', 'Aaron', 'Bianca', 'Caleb', 'Dana', 'Eli', 'Fiona', 'Gabe', 'Hana', 'Ivan', 'Jade', 'Kevin', 'Lena', 'Marco', 'Nina'];
     const LAST = ['Abbott', 'Bauer', 'Castro', 'Dalton', 'Ellis', 'Fischer', 'Garza', 'Holt', 'Ibarra', 'Jensen', 'Keller', 'Lam', 'Moreno', 'Nash', 'Oakley', 'Pruitt', 'Quintana', 'Rhodes',
@@ -2097,12 +2102,13 @@
     const reps = [ids.u1, ids.u2, ...tIds.slice(0, 4)].filter(Boolean);
     const coords = [ids.u3, tIds[4], tIds[5]].filter(Boolean);
 
-    // Plan every job first, then insert homeowners → properties → deals → projects → activities
+    // 30 customers in all: the 7 hand-written ones above + 23 here, so every stage has an example
     const salesStages = ['New lead', 'Follow-up', 'Appointment set', 'Proposal sent', 'Sold', 'Lost'];
+    const PLAN = [['New lead', 2], ['Follow-up', 2], ['Appointment set', 2], ['Proposal sent', 1], ['Lost', 1],
+      ['Contract', 2], ['Design', 2], ['PIR', 1], ['Utility pre-check', 1], ['Permit approved', 1], ['MPU', 1], ['Install scheduled', 1],
+      ['Install verification & post-install design', 1], ['Post-install permitting', 1], ['PTO', 1], ['M3', 1], ['Closed', 1], ['Service & monitoring', 1]];
     const jobs = [];
-    salesStages.forEach((stage) => { const n = stage === 'Lost' ? between(12, 20) : howMany(); for (let i = 0; i < n; i++) jobs.push({ kind: 'deal', stage }); });
-    INSTALL_STEPS.forEach((step) => { const n = howMany(); for (let i = 0; i < n; i++) jobs.push({ kind: 'project', step }); });
-    for (let i = 0; i < between(4, 8); i++) jobs.push({ kind: 'project', step: 'Paused' });
+    PLAN.forEach(([stage, n]) => { for (let i = 0; i < n; i++) jobs.push(salesStages.includes(stage) ? { kind: 'deal', stage } : { kind: 'project', step: stage }); });
     jobs.forEach((j) => {
       j.name = person();
       j.kw = Math.round((4 + rnd() * 8) * 10) / 10;
@@ -2173,11 +2179,11 @@
     const recent = dealJobs.filter((j) => j.stage !== 'Lost');
     const OUT = [['Door knock', 'Not home'], ['Door knock', 'Appointment set'], ['Door knock', 'Not interested'], ['Call', 'No answer'], ['Call', 'Left voicemail'],
       ['Call', 'Callback set'], ['Appointment', 'Proposal sent'], ['Appointment', 'Sold'], ['Text', 'Callback set']];
-    await bulk('activities', Array.from({ length: between(140, 180) }, () => {
+    await bulk('activities', Array.from({ length: between(30, 40) }, () => {
       const j = pick(recent); const [type, outcome] = pick(OUT);
       return { subject: `${type} — ${outcome}`, type, outcome, deal: j.id, company: j.home, rep: pick(reps), date: day(-between(0, 6)) };
     }));
-    await bulk('calendar', Array.from({ length: between(10, 16) }, () => {
+    await bulk('calendar', Array.from({ length: between(4, 6) }, () => {
       const j = pick(dealJobs.filter((x) => x.stage === 'Appointment set'));
       return { title: `Appointment — ${j.name.split(' ')[1]}`, date: day(between(0, 6)), time: pick(['10:00 AM', '1:30 PM', '4:00 PM', '6:00 PM', '6:30 PM', '7:00 PM']), assigned_to: pick(reps), company: j.home };
     }));
@@ -2206,9 +2212,28 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   async function resetSample() {
+    const meName = settings.meName || (userRec(settings.meId) || { payload: {} }).payload.name || null;
     await removeSampleData();
     await removeStraySample();
     await loadSampleData();
+    if (meName) settings.meName = meName;
+    await ensureMe();
+  }
+  // Keep "who I am" pointing at a real team member: re-link by name after sample data is rebuilt,
+  // otherwise clear it so nothing gets saved against a deleted person.
+  async function ensureMe() {
+    if (!byKey.users) return;
+    const users = await load(byKey.users, true);
+    const cur = settings.meId && users.find((u) => u.id === settings.meId);
+    if (cur) { if (settings.meName !== cur.payload.name) { settings.meName = cur.payload.name; saveSettings(); } return; }
+    if (!settings.meId) return;
+    const want = (settings.meName || '').toLowerCase();
+    const first = (settings.name || '').toLowerCase();
+    const hit = (want && users.find((u) => (u.payload.name || '').toLowerCase() === want))
+      || (first && users.filter((u) => (u.payload.name || '').toLowerCase().split(' ')[0] === first).length === 1 && users.find((u) => (u.payload.name || '').toLowerCase().split(' ')[0] === first));
+    if (hit) { settings.meId = hit.id; settings.meName = hit.payload.name; }
+    else { settings.meId = ''; }
+    saveSettings();
   }
 
   async function removeSampleData() {
@@ -2228,7 +2253,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 10;
+  const SAMPLE_VERSION = 11;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -2333,6 +2358,7 @@
     const saveBtn = el('button', { class: 'btn primary', onclick: () => {
       settings.name = name.value.trim();
       settings.meId = me.value;
+      settings.meName = me.value ? ((userRec(me.value) || { payload: {} }).payload.name || '') : '';
       settings.workspace = ws.value.trim() || 'Workspace';
       const q = queues.value.split('\n').map((s) => s.trim()).filter(Boolean);
       settings.queues = q.length ? q.slice(0, 24) : DEFAULT_QUEUES.slice();
@@ -2360,7 +2386,7 @@
         el('div', { class: 'wide field' }, el('span', {}, 'Sample data'),
           el('p', { class: 'hint', style: 'margin:0' }, hasSample()
             ? 'Fictional placeholder records are loaded. Remove them before importing real data. Records you added yourself stay.'
-            : 'Fill every tab with fictional homeowners: about 30 jobs in every sales stage and project step, a 9-person team, appointments and chats.'),
+            : 'Fill every tab with 30 fictional homeowners spread across every sales stage and project step, plus a 9-person team, appointments and chats.'),
           el('div', { class: 'actions-row' }, hasSample()
             ? [el('button', { class: 'btn', type: 'button', onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.lastChild.textContent = 'Reloading…'; try { await resetSample(); closeDrawer(); toast('Sample data reloaded'); await render(); refreshCounts(); } catch (er) { toast(er.message, true); b.disabled = false; } } }, icon('upload'), 'Reload full sample'),
                el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')]
@@ -2884,9 +2910,10 @@
       pill.className = 'mode-pill on';
       pill.title = LOCAL ? 'Data is saved in this browser on this device' : 'Connected to the server';
       await bootstrap();
+      await ensureMe();
       if (settings.sampleVersion !== SAMPLE_VERSION && (hasSample() || await strayedSample())) {
         // Older or half-loaded sample records → the current full sample. Records you added stay.
-        try { await resetSample(); toast('Sample data loaded: ~30 jobs in every stage'); }
+        try { await resetSample(); toast('Sample data updated: 30 example customers'); }
         catch (e) { console.warn('Sample refresh failed', e.message); toast('Couldn’t finish loading sample data. Open Settings → Sample data to retry.', true); }
       }
       await render();
