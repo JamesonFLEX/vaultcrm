@@ -87,6 +87,8 @@ POST /api/vault/link-records
 | GET | `/api/registry/list` | — |
 | GET | `/api/registry/:id` | — |
 | POST | `/api/vault/insert-record` | `registry_id, payload` |
+| POST | `/api/vault/bulk-insert` | `registry_id, rows` (1–2000 payloads; all validated, then saved together) |
+| POST | `/api/vault/bulk-delete` | `registry_id, ids` |
 | POST | `/api/vault/update-record` | `registry_id, record_id, payload` (null clears a field) |
 | POST | `/api/vault/query-records` | `registry_id, filterField?, filterValue?, limit?, offset?, expand?` |
 | POST | `/api/vault/link-records` | `registry_id, record_id, field, target_record_id` |

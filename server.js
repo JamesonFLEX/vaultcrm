@@ -191,7 +191,7 @@ app.post('/api/vault/query-records', wrap(async (req, res) => {
   }
 
   params.push(limit, offset);
-  sql += ` ORDER BY date_created DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
+  sql += ` ORDER BY date_created DESC, id DESC LIMIT $${params.length - 1} OFFSET $${params.length}`;
   const { rows } = await pool.query(sql, params);
 
   // expand=true: resolve REF fields in ONE extra query (no N+1)
@@ -209,6 +209,38 @@ app.post('/api/vault/query-records', wrap(async (req, res) => {
 }));
 
 // Update a record: validated partial merge. Fields sent as null/'' are removed.
+// 2b. Bulk insert (imports, sample data): all rows validated first, then one transaction
+app.post('/api/vault/bulk-insert', wrap(async (req, res) => {
+  const { registry_id, rows } = req.body || {};
+  if (!Array.isArray(rows) || !rows.length || rows.length > 2000) throw new HttpError(400, 'rows must be an array of 1–2000 payloads');
+  const reg = await getRegistry(pool, registry_id);
+  const cleanRows = rows.map((p, i) => {
+    try { return sanitizePayload(reg.fields_schema, p).clean; }
+    catch (e) { e.message = `Row ${i + 1}: ${e.message}`; throw e; }
+  });
+  for (const c of cleanRows) await verifyRefs(pool, reg.fields_schema, c);
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const ids = [];
+    for (const c of cleanRows) {
+      const { rows: r } = await client.query('INSERT INTO app_records_vault (registry_id, payload) VALUES ($1, $2::jsonb) RETURNING id', [reg.id, JSON.stringify(c)]);
+      ids.push(r[0].id);
+    }
+    await client.query('COMMIT');
+    res.status(201).json({ ids });
+  } catch (e) { await client.query('ROLLBACK'); throw e; } finally { client.release(); }
+}));
+
+// 2c. Bulk delete by id within one table
+app.post('/api/vault/bulk-delete', wrap(async (req, res) => {
+  const { registry_id, ids } = req.body || {};
+  if (!Array.isArray(ids) || ids.length > 5000 || ids.some((x) => !isUuid(x))) throw new HttpError(400, 'ids must be an array of up to 5000 UUIDs');
+  const reg = await getRegistry(pool, registry_id);
+  const { rowCount } = await pool.query('DELETE FROM app_records_vault WHERE registry_id = $1 AND id = ANY($2::uuid[])', [reg.id, ids]);
+  res.json({ deleted: rowCount });
+}));
+
 app.post('/api/vault/update-record', wrap(async (req, res) => {
   const { registry_id, record_id, payload } = req.body || {};
   if (!isUuid(record_id)) throw new HttpError(400, 'record_id must be a UUID');

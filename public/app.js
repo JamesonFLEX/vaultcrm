@@ -366,10 +366,15 @@
   // ---------------------------------------------------------------------
   async function load(spec, force) {
     if (!force && cache[spec.key]) return cache[spec.key];
-    const r = await api('POST', '/api/vault/query-records', { registry_id: spec.reg.id, limit: 500 });
-    cache[spec.key] = r.records;
-    spec.reg.record_count = Math.max(spec.reg.record_count || 0, r.records.length);
-    return r.records;
+    const all = [];
+    for (let offset = 0; offset < 50000; offset += 500) {
+      const r = await api('POST', '/api/vault/query-records', { registry_id: spec.reg.id, limit: 500, offset });
+      all.push(...r.records);
+      if (r.records.length < 500) break;
+    }
+    cache[spec.key] = all;
+    spec.reg.record_count = Math.max(spec.reg.record_count || 0, all.length);
+    return all;
   }
   const refTargets = (spec) => Object.keys(schemaOf(spec))
     .map((k) => typeOf(spec, k)).filter((t) => t.base === 'REF').map((t) => byRegId[t.target]).filter(Boolean);
@@ -548,6 +553,7 @@
       else if (r.name === 'new') node = renderBuilder();
       else node = await renderTableView(byKey[r.key], r.params);
       if (token !== renderToken) return;
+      if (r.name !== 'new') node.append(pageFoot(r));
       view.replaceChildren(node);
       updateBell();
       stagger(view);
@@ -659,7 +665,7 @@
         el('div', { class: 'jlane sales' }, el('div', { class: 'jlane-label' }, icon('target'), 'Sales'),
           el('div', { class: 'jsteps', style: `--n:${salesSteps.length}` }, salesSteps.map((st, i) => {
             const list = deals.filter((r) => (r.payload.stage || 'New lead') === st);
-            if (st === 'Sold') return step(i + 1, 'Sold', soldMonth, 'this month', '#/t/deals?stage=Sold', 'sold');
+            if (st === 'Sold') return step(i + 1, 'Sold', list.length, `${soldMonth} this month`, '#/t/deals?stage=Sold', 'sold');
             return step(i + 1, st, list.length, list.length ? money(sumVal(list)) : null, '#/t/deals?stage=' + encodeURIComponent(st), 'sale');
           }))),
         el('div', { class: 'jhandoff', 'aria-hidden': 'true' }, el('span', { class: 'jline' }), icon('arrowR'), el('span', {}, 'Sold deals start a project automatically'), el('span', { class: 'jline' })),
@@ -800,7 +806,7 @@
       body.replaceChildren(
         rows.length ? gridTable(spec, rows, spec.columns, onSort, st.sort || { field: '' }, !drawn)
           : emptyState('search', 'No matches', 'Try a different search or clear the filters.', el('button', { class: 'btn', onclick: () => { st.q = ''; st.chip = ''; searchInput.value = ''; draw(); syncChips(); } }, 'Clear filters')),
-        el('div', { class: 'grid-foot' }, el('span', {}, `Showing ${rows.length} of ${base.length}`), recs.length >= 500 ? el('span', {}, 'First 500 records loaded') : el('span', {}, '')));
+        el('div', { class: 'grid-foot' }, el('span', {}, `Showing ${rows.length} of ${base.length}`), el('span', {}, '')));
       if (!drawn) stagger(body);
       drawn = true;
     }
@@ -1455,6 +1461,7 @@
       ids[ref] = r.record.id;
       (made[key] = made[key] || []).push(r.record.id);
     }
+    if (!only) await loadVolumeSample(ids, made);
     const prev = settings.sampleIds || {};
     for (const [k, v] of Object.entries(made)) prev[k] = (prev[k] || []).concat(v);
     settings.sampleIds = prev;
@@ -1463,14 +1470,126 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
 
+  // A realistic book of business: about 30 jobs (varied) in every sales stage and project step.
+  // Fictional homeowners only. Inserted in bulk so it loads fast on a phone.
+  async function loadVolumeSample(ids, made) {
+    let seed = 20261101;
+    const rnd = () => { seed = (seed * 1103515245 + 12345) % 2147483648; return seed / 2147483648; };
+    const pick = (a) => a[Math.floor(rnd() * a.length)];
+    const between = (lo, hi) => lo + Math.floor(rnd() * (hi - lo + 1));
+    const day = (n) => { const d = new Date(); d.setDate(d.getDate() + n); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+    const howMany = () => between(23, 37);
+    const FIRST = ['Ava', 'Ben', 'Carla', 'Diego', 'Elena', 'Frank', 'Grace', 'Hector', 'Iris', 'Jamal', 'Kara', 'Leo', 'Maya', 'Noah', 'Olivia', 'Pedro', 'Quinn', 'Rosa', 'Sean', 'Tara',
+      'Uma', 'Victor', 'Wendy', 'Xavier', 'Yvonne', 'Zack', 'Aaron', 'Bianca', 'Caleb', 'Dana', 'Eli', 'Fiona', 'Gabe', 'Hana', 'Ivan', 'Jade', 'Kevin', 'Lena', 'Marco', 'Nina'];
+    const LAST = ['Abbott', 'Bauer', 'Castro', 'Dalton', 'Ellis', 'Fischer', 'Garza', 'Holt', 'Ibarra', 'Jensen', 'Keller', 'Lam', 'Moreno', 'Nash', 'Oakley', 'Pruitt', 'Quintana', 'Rhodes',
+      'Santos', 'Tran', 'Underwood', 'Vance', 'Wolfe', 'Yates', 'Zamora', 'Avila', 'Brooks', 'Chen', 'Duarte', 'Espinoza', 'Foster', 'Gill', 'Haddad', 'Iverson', 'Juarez', 'Kaur',
+      'Lowe', 'Mendez', 'Novak', 'Ortega', 'Park', 'Reid', 'Sandoval', 'Tanaka', 'Valdez', 'Webb', 'Young', 'Zhou'];
+    const CITIES = [['Roseville', '95661'], ['Roseville', '95678'], ['Rocklin', '95677'], ['Lincoln', '95648'], ['Auburn', '95603'], ['Loomis', '95650'], ['Granite Bay', '95746'], ['Citrus Heights', '95610']];
+    const STREETS = ['Sample St', 'Example Ave', 'Placeholder Ct', 'Demo Way', 'Test Ln', 'Mock Dr', 'Model Pl', 'Trial Rd'];
+    const usedNames = new Set();
+    const person = () => { let n; do { n = `${pick(FIRST)} ${pick(LAST)}`; } while (usedNames.has(n)); usedNames.add(n); return n; };
+    const bulk = async (key, rows) => {
+      const spec = byKey[key];
+      const out = [];
+      for (let i = 0; i < rows.length; i += 1000) {
+        const r = await api('POST', '/api/vault/bulk-insert', { registry_id: spec.reg.id, rows: rows.slice(i, i + 1000) });
+        out.push(...r.ids);
+      }
+      (made[key] = made[key] || []).push(...out);
+      return out;
+    };
+
+    // Bigger team so the leaderboard means something
+    const team = [['Jordan Blake', 'Setter'], ['Riley Chen', 'Setter'], ['Casey Monroe', 'Closer'], ['Taylor Brooks', 'Closer'], ['Devon Ruiz', 'Install coordinator'], ['Morgan Lee', 'Install coordinator']];
+    const tIds = await bulk('users', team.map(([name, role], i) => ({ name, role, email: `${name.split(' ')[0].toLowerCase()}@example.com`, phone: `916-555-02${String(10 + i).padStart(2, '0')}`, active: true })));
+    const reps = [ids.u1, ids.u2, ...tIds.slice(0, 4)].filter(Boolean);
+    const coords = [ids.u3, tIds[4], tIds[5]].filter(Boolean);
+
+    // Plan every job first, then insert homeowners → properties → deals → projects → activities
+    const salesStages = ['New lead', 'Follow-up', 'Appointment set', 'Proposal sent', 'Sold', 'Lost'];
+    const jobs = [];
+    salesStages.forEach((stage) => { const n = stage === 'Lost' ? between(12, 20) : howMany(); for (let i = 0; i < n; i++) jobs.push({ kind: 'deal', stage }); });
+    INSTALL_STEPS.forEach((step) => { const n = howMany(); for (let i = 0; i < n; i++) jobs.push({ kind: 'project', step }); });
+    for (let i = 0; i < between(4, 8); i++) jobs.push({ kind: 'project', step: 'Paused' });
+    jobs.forEach((j) => {
+      j.name = person();
+      j.kw = Math.round((4 + rnd() * 8) * 10) / 10;
+      j.value = Math.round(j.kw * between(2900, 3600) / 100) * 100;
+      j.fin = rnd() < 0.7 ? 'PPA' : pick(['Lease', 'Loan', 'Cash']);
+      j.battery = rnd() < 0.25;
+      j.city = pick(CITIES);
+    });
+    const util = (c) => c[0] === 'Roseville' ? (rnd() < 0.7 ? 'Roseville Electric' : 'PG&E') : 'PG&E';
+    const homeIds = await bulk('companies', jobs.map((j) => ({
+      company_name: `${j.name} Household`, status: j.kind === 'project' || j.stage === 'Sold' ? 'Customer' : j.stage === 'Lost' ? 'Not a fit' : 'Lead',
+      phone: `916-555-${String(between(1000, 9999))}`, utility: util(j.city), avg_monthly_bill: between(140, 520),
+      roof_type: pick(['Composition shingle', 'Composition shingle', 'Tile', 'Metal']), roof_age: between(1, 22), shade: pick(['None', 'None', 'Some', 'Heavy']), hoa: rnd() < 0.2 })));
+    jobs.forEach((j, i) => { j.home = homeIds[i]; });
+    await bulk('locations', jobs.map((j) => ({ location_name: `${j.name.split(' ')[1]} home`, company: j.home, address: `${between(100, 9900)} ${pick(STREETS)}`, city: j.city[0], state: 'CA', zip: j.city[1] })));
+
+    const NEXT = { 'New lead': ['First call', 'Knock again this weekend', 'Text intro + ask for a bill'], 'Follow-up': ['Call back after 6pm', 'Get both decision-makers home', 'Waiting on utility bill'],
+      'Appointment set': ['Kitchen-table appointment', 'Bring 12 months of bills', 'Review roof + shade'], 'Proposal sent': ['Walk through proposal', 'Answer battery questions', 'Compare PPA vs lease'],
+      Sold: ['Hand off to project team'], Lost: ['Revisit in 6 months'] };
+    const dealJobs = jobs.filter((j) => j.kind === 'deal');
+    const dealIds = await bulk('deals', dealJobs.map((j) => {
+      const closed = j.stage === 'Sold' || j.stage === 'Lost';
+      return Object.assign({ deal_name: `${j.name.split(' ')[1]} — ${j.kw} kW`, stage: j.stage, value: j.value, system_size_kw: j.kw, financing: j.fin, battery: j.battery,
+        company: j.home, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
+        closed ? { close_date: day(-between(0, 25)) } : { follow_up: day(between(-6, 12)) });
+    }));
+    dealJobs.forEach((j, i) => { j.id = dealIds[i]; });
+
+    // Each project step: milestone dates filled up to that step, monitoring once live
+    const projJobs = jobs.filter((j) => j.kind === 'project');
+    const order = INSTALL_STEPS;
+    const reached = (j, s) => j.step !== 'Paused' && order.indexOf(j.step) >= order.indexOf(s);
+    const STATUS_NOTE = { Contract: 'Docs signed, welcome call next', 'Pre-install': 'Site survey booked', Design: 'Design in progress', 'Revisions & NTP / M1': 'Waiting on homeowner sign-off',
+      PIR: 'Pre-install review', 'MPU planning': 'Panel upgrade needed', 'Utility pre-check': 'Submitted to utility', 'Permit submitted': 'With the city', 'Permit approved': 'Ready to schedule',
+      MPU: 'Electrician booked', 'Install scheduled': 'Crew booked', 'Install verification & post-install design': 'Photos under review', 'Post-install permitting': 'As-builts submitted',
+      'System activation & inspection': 'Waiting on inspector', PTO: 'Permission to operate granted', M3: 'Final funding pending', Closed: 'Complete', 'Service & monitoring': 'Annual check-in', Paused: 'Homeowner asked to pause' };
+    await bulk('projects', projJobs.map((j) => {
+      const age = order.indexOf(j.step) < 0 ? between(10, 60) : order.indexOf(j.step) * 6 + between(2, 10);
+      const live = reached(j, 'PTO');
+      const p = { project_title: `${j.name.split(' ')[1]} — project`, status: j.step, queue: settings.queues[Math.min(4, Math.floor(Math.max(0, order.indexOf(j.step)) / 4))] || undefined,
+        assigned_to: pick(coords), company: j.home, project_type: j.battery ? 'Solar + battery' : 'Solar', date_due: day(between(-5, 14)), url_details: STATUS_NOTE[j.step],
+        contract_date: day(-age), system_size_kw: j.kw, panel_count: Math.round(j.kw * 1000 / 400), panel_model: 'Sample 400W mono panel', inverter: pick(['Sample microinverters', 'Sample string inverter']),
+        funding_source: j.fin, contract_value: j.value, mpu_required: reached(j, 'MPU planning') ? rnd() < 0.3 : rnd() < 0.15 };
+      if (j.battery) p.battery_model = 'Sample 13.5 kWh battery';
+      if (reached(j, 'Revisions & NTP / M1')) p.ntp_m1_date = day(-age + 7);
+      if (reached(j, 'Permit approved')) p.permit_approved_date = day(-age + 20);
+      if (reached(j, 'Install verification & post-install design')) p.install_date = day(-age + 32);
+      if (live) { p.pto_date = day(-age + 45); p.monitoring_status = rnd() < 0.85 ? 'Online' : pick(['Offline', 'Service needed']); p.monitoring_platform = 'Sample monitoring app'; p.monitoring_site_id = 'SAMPLE-' + between(1000, 9999); }
+      if (reached(j, 'M3')) p.m3_date = day(-age + 52);
+      if (reached(j, 'Closed')) p.closed_date = day(-age + 56);
+      if (rnd() < 0.2) { p.adders = pick(['Critter guard', 'Trenching', 'Roof reinforcement', 'Critter guard\nEV-ready circuit']); p.adders_total = between(4, 30) * 100; }
+      Object.keys(p).forEach((k) => p[k] === undefined && delete p[k]);
+      return p;
+    }));
+
+    // A week of activity across the team for the leaderboard
+    const recent = dealJobs.filter((j) => j.stage !== 'Lost');
+    const OUT = [['Door knock', 'Not home'], ['Door knock', 'Appointment set'], ['Door knock', 'Not interested'], ['Call', 'No answer'], ['Call', 'Left voicemail'],
+      ['Call', 'Callback set'], ['Appointment', 'Proposal sent'], ['Appointment', 'Sold'], ['Text', 'Callback set']];
+    await bulk('activities', Array.from({ length: between(140, 180) }, () => {
+      const j = pick(recent); const [type, outcome] = pick(OUT);
+      return { subject: `${type} — ${outcome}`, type, outcome, deal: j.id, company: j.home, rep: pick(reps), date: day(-between(0, 6)) };
+    }));
+    await bulk('calendar', Array.from({ length: between(10, 16) }, () => {
+      const j = pick(dealJobs.filter((x) => x.stage === 'Appointment set'));
+      return { title: `Appointment — ${j.name.split(' ')[1]}`, date: day(between(0, 6)), time: pick(['10:00 AM', '1:30 PM', '4:00 PM', '6:00 PM', '6:30 PM', '7:00 PM']), assigned_to: pick(reps), company: j.home };
+    }));
+  }
+
   async function removeSampleData() {
     const all = settings.sampleIds || {};
     // Delete records that point at others first (reverse of creation order)
     const order = SPEC.map((s) => s.key).reverse();
     for (const key of order) {
       const spec = byKey[key];
-      for (const id of all[key] || []) {
-        try { await api('DELETE', `/api/vault/record/${spec.reg.id}/${id}`); } catch (_) { /* already gone */ }
+      const ids = all[key] || [];
+      for (let i = 0; i < ids.length; i += 2000) {
+        try { await api('POST', '/api/vault/bulk-delete', { registry_id: spec.reg.id, ids: ids.slice(i, i + 2000) }); }
+        catch (_) { for (const id of ids.slice(i, i + 2000)) { try { await api('DELETE', `/api/vault/record/${spec.reg.id}/${id}`); } catch (__) { /* already gone */ } } }
       }
     }
     delete settings.sampleIds;
@@ -1478,7 +1597,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 4;
+  const SAMPLE_VERSION = 5;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -1660,6 +1779,355 @@
       toast(`Imported ${r.records} records`);
       render();
     } catch (err) { toast('Import failed: ' + err.message, true); }
+  }
+
+  // ---------------------------------------------------------------------
+  // CSV import / export (Salesforce, SalesRabbit, spreadsheets…)
+  // Everything happens in this browser; the file is never uploaded anywhere.
+  // ---------------------------------------------------------------------
+  function parseCSV(text) {
+    text = String(text).replace(/^﻿/, '');
+    const first = text.slice(0, text.indexOf('\n') > -1 ? text.indexOf('\n') : text.length);
+    const count = (ch) => first.split(ch).length - 1;
+    const delim = [',', ';', '\t'].sort((a, b) => count(b) - count(a))[0];
+    const rows = []; let row = []; let cell = ''; let q = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (q) {
+        if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; }
+        else cell += c;
+      } else if (c === '"') q = true;
+      else if (c === delim) { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') {
+        if (c === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); cell = '';
+        if (row.some((v) => v.trim() !== '')) rows.push(row);
+        row = [];
+      } else cell += c;
+    }
+    row.push(cell);
+    if (row.some((v) => v.trim() !== '')) rows.push(row);
+    const headers = (rows.shift() || []).map((h, i) => h.trim() || `Column ${i + 1}`);
+    return { headers, rows: rows.map((r) => headers.map((_, i) => (r[i] ?? '').trim())) };
+  }
+  const norm = (x) => String(x).toLowerCase().replace(/[^a-z0-9]+/g, '');
+  // Common column names from Salesforce, SalesRabbit and spreadsheets → our fields
+  const SYN = {
+    deal_name: ['opportunity name', 'opportunity', 'deal name', 'deal', 'lead name'],
+    value: ['amount', 'contract value', 'contract amount', 'price', 'total', 'deal value'],
+    stage: ['stage', 'opportunity stage', 'lead status', 'status'],
+    close_date: ['close date', 'closed date', 'date closed', 'sold date'],
+    follow_up: ['follow up', 'follow up date', 'next follow up', 'next activity date', 'callback date'],
+    next_step: ['next step', 'next steps'],
+    company: ['account name', 'account', 'homeowner', 'household', 'customer', 'customer name'],
+    contact: ['contact name', 'primary contact', 'contact'],
+    owner: ['opportunity owner', 'lead owner', 'account owner', 'owner', 'owner name', 'rep', 'sales rep', 'setter', 'closer'],
+    rep: ['rep', 'sales rep', 'user', 'assigned to', 'owner'],
+    assigned_to: ['assigned to', 'project manager', 'owner', 'responsible'],
+    source: ['lead source', 'source'],
+    company_name: ['account name', 'household', 'homeowner', 'customer name', 'name', 'full name'],
+    location_name: ['property', 'property name', 'site name', 'location'],
+    first_name: ['first name', 'firstname', 'first'],
+    last_name: ['last name', 'lastname', 'last', 'surname'],
+    email: ['email', 'email address', 'e mail'],
+    phone: ['phone', 'phone number', 'mobile', 'mobile phone', 'cell', 'cell phone', 'home phone'],
+    address: ['street', 'address', 'street address', 'mailing street', 'billing street', 'address line 1'],
+    city: ['city', 'mailing city', 'billing city'],
+    state: ['state', 'state province', 'mailing state', 'billing state', 'mailing state province', 'billing state province'],
+    zip: ['zip', 'zip code', 'zipcode', 'postal code', 'mailing zip postal code', 'billing zip postal code'],
+    job_title: ['title', 'role', 'job title'],
+    notes: ['description', 'notes', 'note', 'comments', 'comment'],
+    system_size_kw: ['system size', 'system size kw', 'kw', 'size kw'],
+    financing: ['financing', 'finance type', 'funding source', 'payment type'],
+    funding_source: ['funding source', 'financing', 'finance type'],
+    utility: ['utility', 'utility company', 'electric company'],
+    avg_monthly_bill: ['avg monthly bill', 'average bill', 'monthly bill', 'average monthly bill'],
+    project_title: ['project name', 'project', 'job name', 'name'],
+    status: ['status', 'project status', 'stage', 'step'],
+    date_due: ['due date', 'due', 'next action due'],
+    subject: ['subject', 'activity', 'task'],
+    date: ['date', 'activity date', 'event date'],
+    type: ['type', 'activity type'],
+    outcome: ['outcome', 'result', 'disposition', 'call result']
+  };
+  const CHOICE_SYN = {
+    stage: { 'closed won': 'Sold', won: 'Sold', sold: 'Sold', 'closed lost': 'Lost', lost: 'Lost', prospecting: 'New lead', new: 'New lead', open: 'New lead',
+      qualification: 'Follow-up', contacted: 'Follow-up', working: 'Follow-up', 'needs analysis': 'Appointment set', 'value proposition': 'Appointment set',
+      'id decision makers': 'Appointment set', appointment: 'Appointment set', 'perception analysis': 'Proposal sent', 'proposal price quote': 'Proposal sent',
+      proposal: 'Proposal sent', 'negotiation review': 'Proposal sent', negotiation: 'Proposal sent' }
+  };
+  function matchField(spec, header, taken) {
+    const h = norm(header);
+    const fields = Object.keys(schemaOf(spec)).filter((k) => !taken.has(k) && !(spec.hide || []).includes(k));
+    let hit = fields.find((k) => norm(k) === h || norm(fieldLabel(spec, k)) === h);
+    if (!hit) hit = fields.find((k) => (SYN[k] || []).some((x) => norm(x) === h));
+    return hit || '';
+  }
+  function isoDate(v) {
+    const t = String(v).trim();
+    let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}`;
+    m = t.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})/);
+    if (m) { const y = m[3].length === 2 ? '20' + m[3] : m[3]; return `${y}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`; }
+    const d = new Date(t);
+    return isNaN(d) ? null : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  }
+  function convertValue(spec, field, raw, lookups, problems) {
+    const v = String(raw ?? '').trim();
+    if (v === '') return undefined;
+    const t = typeOf(spec, field);
+    switch (t.base) {
+      case 'NUMBER': {
+        const n = Number(v.replace(/[$,\s]/g, '').replace(/^\((.*)\)$/, '-$1').replace(/kw$/i, ''));
+        if (isNaN(n)) { problems.push(`${fieldLabel(spec, field)}: “${v}” isn’t a number`); return undefined; }
+        return n;
+      }
+      case 'DATE': { const d = isoDate(v); if (!d) problems.push(`${fieldLabel(spec, field)}: “${v}” isn’t a date`); return d || undefined; }
+      case 'BOOLEAN': return /^(true|yes|y|1|x|checked)$/i.test(v);
+      case 'URL': return /^https?:\/\//i.test(v) ? v : (/\./.test(v) ? 'https://' + v : undefined);
+      case 'CHOICE': {
+        const opts = t.options;
+        const exact = opts.find((o) => o.toLowerCase() === v.toLowerCase());
+        if (exact) return exact;
+        const syn = CHOICE_SYN[field] && CHOICE_SYN[field][v.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()];
+        if (syn && opts.includes(syn)) return syn;
+        const loose = opts.find((o) => norm(o) === norm(v)) || opts.find((o) => norm(o).startsWith(norm(v)) || norm(v).startsWith(norm(o)));
+        if (loose) return loose;
+        problems.push(`${fieldLabel(spec, field)}: “${v}” isn’t an option`);
+        return undefined;
+      }
+      case 'REF': {
+        const target = byRegId[t.target];
+        const map = lookups[t.target];
+        const id = map && (map.get(v.toLowerCase()) || map.get(norm(v)));
+        if (id) return id;
+        if (map && map.create && target) return { create: v, target };
+        problems.push(`${fieldLabel(spec, field)}: no ${target ? target.single : 'record'} named “${v}”`);
+        return undefined;
+      }
+      default: return v;
+    }
+  }
+  async function buildLookups(spec) {
+    const out = {};
+    for (const k of Object.keys(schemaOf(spec))) {
+      const t = typeOf(spec, k);
+      if (t.base !== 'REF' || out[t.target]) continue;
+      const target = byRegId[t.target];
+      if (!target) continue;
+      const recs = await load(target, true);
+      const m = new Map();
+      recs.forEach((r) => {
+        const title = titleOf(target, r);
+        m.set(title.toLowerCase(), r.id); m.set(norm(title), r.id);
+        if (r.payload.email) m.set(String(r.payload.email).toLowerCase(), r.id);
+      });
+      m.create = ['companies', 'contacts', 'locations'].includes(target.key);
+      out[t.target] = m;
+    }
+    return out;
+  }
+  async function createLinked(target, name) {
+    const first = Object.keys(schemaOf(target))[0];
+    let payload = { [first]: name };
+    if (target.key === 'contacts') { const [a, ...b] = name.split(/\s+/); payload = { first_name: a, last_name: b.join(' ') || undefined }; }
+    if (target.key === 'companies') payload.status = 'Lead';
+    Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
+    const r = await api('POST', '/api/vault/insert-record', { registry_id: target.reg.id, payload });
+    return r.record.id;
+  }
+  function guessType(values) {
+    const vals = values.filter((v) => v !== '').slice(0, 200);
+    if (!vals.length) return 'TEXT';
+    if (vals.every((v) => /^[$(]?-?[\d,]+(\.\d+)?\)?$/.test(v))) return 'NUMBER';
+    if (vals.every((v) => isoDate(v) && /\d{1,4}[/.-]\d{1,2}[/.-]\d{1,4}/.test(v))) return 'DATE';
+    if (vals.every((v) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v))) return 'EMAIL';
+    if (vals.every((v) => /^https?:\/\//i.test(v))) return 'URL';
+    if (vals.some((v) => v.length > 120)) return 'LONGTEXT';
+    return 'TEXT';
+  }
+
+  function openImport(defaultKey) {
+    const choices = specs.filter((x) => !['feed'].includes(x.key));
+    const tableSel = el('select', { class: 'select', id: 'imp_table' },
+      choices.map((x) => el('option', { value: x.key, selected: x.key === defaultKey }, labelOf(x))),
+      el('option', { value: '__new' }, '+ New table from this file'));
+    const file = el('input', { class: 'input', id: 'imp_file', type: 'file', accept: '.csv,text/csv,.tsv,text/tab-separated-values' });
+    const err = el('div', { class: 'form-error', role: 'alert', hidden: true });
+    const body = el('div', { class: 'drawer-body' },
+      el('div', { class: 'imp-hero wide' }, el('span', { class: 'qart', style: '--h:200' }, el('span', { class: 'qglow' }), icon('upload')),
+        el('div', {}, el('b', {}, 'Bring your data over'),
+          el('p', {}, 'Export a CSV from Salesforce (a report or list view), SalesRabbit, a spreadsheet or any CRM, then pick it here. Columns match automatically and you can adjust them before anything is saved.'))),
+      el('label', { class: 'field wide', for: 'imp_table' }, el('span', {}, 'Import into'), tableSel),
+      el('label', { class: 'field wide', for: 'imp_file' }, el('span', {}, 'CSV file'), file),
+      el('p', { class: 'hint wide', style: 'margin:0' }, 'The file stays on this device. Nothing is uploaded.'),
+      err);
+    showDrawer(
+      el('div', { class: 'drawer-head' },
+        el('div', {}, el('div', { class: 'eyebrow' }, 'Import'), el('h2', { id: 'drawerTitle' }, 'Import from CSV')),
+        el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
+      body,
+      el('div', { class: 'drawer-foot' }, el('span', { class: 'spacer' }), el('button', { class: 'btn ghost', onclick: closeDrawer }, 'Cancel')));
+    file.addEventListener('change', async () => {
+      const f = file.files[0];
+      if (!f) return;
+      err.hidden = true;
+      if (f.size > 15 * 1024 * 1024) { err.hidden = false; err.textContent = 'That file is over 15 MB. Split it into smaller files and import them one at a time.'; return; }
+      let parsed;
+      try { parsed = parseCSV(await f.text()); } catch (e) { err.hidden = false; err.textContent = 'Couldn’t read that file: ' + e.message; return; }
+      if (!parsed.headers.length || !parsed.rows.length) { err.hidden = false; err.textContent = 'That file has no rows to import. Check it has a header row and data under it.'; return; }
+      let spec;
+      if (tableSel.value === '__new') {
+        try { spec = await createTableFromCSV(f.name, parsed); } catch (e) { err.hidden = false; err.replaceChildren(el('strong', {}, e.message), e.details ? el('div', {}, [].concat(e.details).join(' · ')) : null); return; }
+      } else spec = byKey[tableSel.value];
+      mapStep(spec, parsed, f.name);
+    });
+  }
+
+  async function createTableFromCSV(fileName, parsed) {
+    const fields_schema = {}, used = new Set();
+    parsed.headers.slice(0, 100).forEach((h, i) => {
+      let k = slug(h) || `column_${i + 1}`;
+      while (used.has(k)) k = `${k}_${i + 1}`.slice(0, 63);
+      used.add(k);
+      fields_schema[k] = guessType(parsed.rows.map((r) => r[i]));
+    });
+    const name = String(fileName).replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim().slice(0, 90) || 'Imported table';
+    let table_name = name, n = 2;
+    while (specs.some((x) => x.table === table_name)) table_name = `${name} ${n++}`;
+    const r = await api('POST', '/api/registry/create-table', { app_name: 'Custom', table_name, fields_schema });
+    await bootstrap();
+    renderNav();
+    return byRegId[r.registry_id];
+  }
+
+  async function mapStep(spec, parsed, fileName) {
+    await loadWithRefs(spec);
+    const fields = Object.keys(schemaOf(spec)).filter((k) => !(spec.hide || []).includes(k));
+    const taken = new Set();
+    const auto = parsed.headers.map((h) => { const k = matchField(spec, h, taken); if (k) taken.add(k); return k; });
+    // Salesforce-style "Name" on contacts → split into first/last
+    const splitName = spec.key === 'contacts' && !auto.includes('first_name') && parsed.headers.findIndex((h) => ['name', 'fullname', 'contactname'].includes(norm(h)));
+    const selects = parsed.headers.map((h, i) => el('select', { class: 'select', 'aria-label': `Field for ${h}` },
+      el('option', { value: '' }, 'Skip this column'),
+      fields.map((k) => el('option', { value: k, selected: auto[i] === k }, fieldLabel(spec, k)))));
+    const titleField = fields.find((c) => spec.title && spec.title({ [c]: 'x' }) === 'x') || fields[0];
+    const dedupe = el('input', { type: 'checkbox', id: 'imp_dedupe', checked: true });
+    const linkNew = el('input', { type: 'checkbox', id: 'imp_link', checked: true });
+    const hasRef = fields.some((k) => typeOf(spec, k).base === 'REF');
+    const matched = auto.filter(Boolean).length;
+    const sample = parsed.rows.slice(0, 2);
+    const mapRows = el('div', { class: 'imp-map wide' }, parsed.headers.map((h, i) =>
+      el('div', { class: 'imp-row' + (auto[i] ? ' hit' : '') },
+        el('div', { class: 'imp-col' }, el('b', {}, h), el('small', {}, sample.map((r) => r[i]).filter(Boolean).join(' · ').slice(0, 70) || 'empty')),
+        icon('arrowR'), selects[i])));
+    const go = el('button', { class: 'btn primary', onclick: run }, icon('upload'), `Import ${parsed.rows.length.toLocaleString()} row${parsed.rows.length === 1 ? '' : 's'}`);
+    const status = el('div', { class: 'imp-status wide', hidden: true });
+    showDrawer(
+      el('div', { class: 'drawer-head' },
+        el('div', {}, el('div', { class: 'eyebrow' }, `Import · ${fileName}`), el('h2', { id: 'drawerTitle' }, `Match columns to ${labelOf(spec)}`)),
+        el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
+      el('div', { class: 'drawer-body' },
+        el('p', { class: 'hint wide', style: 'margin:0' }, `${parsed.rows.length.toLocaleString()} rows · ${parsed.headers.length} columns · ${matched} matched automatically. Columns set to “Skip” aren’t imported.`),
+        splitName !== false && splitName > -1 ? el('p', { class: 'hint wide', style: 'margin:0' }, `“${parsed.headers[splitName]}” will be split into first and last name.`) : null,
+        mapRows,
+        el('div', { class: 'field set-row wide' }, el('label', { for: 'imp_dedupe', style: 'font-weight:500;font-size:14px' }, `Skip rows whose ${fieldLabel(spec, titleField).toLowerCase()} already exists`), el('label', { class: 'toggle' }, dedupe, el('i'))),
+        hasRef ? el('div', { class: 'field set-row wide' }, el('label', { for: 'imp_link', style: 'font-weight:500;font-size:14px' }, 'Create missing homeowners, contacts and properties'), el('label', { class: 'toggle' }, linkNew, el('i'))) : null,
+        status),
+      el('div', { class: 'drawer-foot' }, el('button', { class: 'btn ghost', onclick: () => openImport(spec.key) }, 'Back'), el('span', { class: 'spacer' }), go));
+
+    async function run() {
+      const map = selects.map((sel) => sel.value);
+      if (!map.some(Boolean) && !(splitName > -1)) { toast('Match at least one column first', true); return; }
+      go.disabled = true;
+      $$('#drawer select, #drawer input').forEach((x) => { x.disabled = true; });
+      status.hidden = false;
+      const bar = el('i');
+      const label = el('span', {}, 'Starting…');
+      status.replaceChildren(el('div', { class: 'imp-bar' }, bar), label);
+      const lookups = await buildLookups(spec);
+      if (!linkNew.checked) Object.values(lookups).forEach((m) => { m.create = false; });
+      const existing = new Set((await load(spec, true)).map((r) => titleOf(spec, r).toLowerCase()));
+      let ok = 0, skipped = 0, failed = 0;
+      const problems = [];
+      const total = parsed.rows.length;
+      for (let i = 0; i < total; i++) {
+        const row = parsed.rows[i];
+        const rowProblems = [];
+        const payload = {};
+        map.forEach((k, ci) => {
+          if (!k) return;
+          const v = convertValue(spec, k, row[ci], lookups, rowProblems);
+          if (v !== undefined && payload[k] === undefined) payload[k] = v;
+        });
+        if (splitName > -1 && row[splitName]) {
+          const [a, ...b] = row[splitName].split(/\s+/);
+          if (!payload.first_name) payload.first_name = a;
+          if (!payload.last_name && b.length) payload.last_name = b.join(' ');
+        }
+        try {
+          for (const [k, v] of Object.entries(payload)) {
+            if (v && typeof v === 'object' && v.create) {
+              const id = await createLinked(v.target, v.create);
+              lookups[v.target.reg.id].set(v.create.toLowerCase(), id);
+              lookups[v.target.reg.id].set(norm(v.create), id);
+              payload[k] = id;
+            }
+          }
+          if (!Object.keys(payload).length) { skipped++; continue; }
+          const title = titleOf(spec, { payload }).toLowerCase();
+          if (dedupe.checked && title !== 'untitled' && existing.has(title)) { skipped++; continue; }
+          await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload });
+          existing.add(title);
+          ok++;
+          if (rowProblems.length && problems.length < 40) problems.push(`Row ${i + 2}: ${rowProblems.join('; ')} (left blank)`);
+        } catch (e) {
+          failed++;
+          if (problems.length < 40) problems.push(`Row ${i + 2}: ${e.message}${e.details ? ' — ' + [].concat(e.details).map((d) => humanizeError(spec, d)).join(', ') : ''}`);
+        }
+        if (i % 10 === 0 || i === total - 1) {
+          bar.style.width = `${Math.round(((i + 1) / total) * 100)}%`;
+          label.textContent = `${(i + 1).toLocaleString()} of ${total.toLocaleString()}`;
+          await new Promise((r) => setTimeout(r));
+        }
+      }
+      Object.keys(cache).forEach((k) => delete cache[k]);
+      await refreshCounts();
+      status.replaceChildren(
+        el('div', { class: 'imp-done' }, icon('check'), el('b', {}, `${ok.toLocaleString()} imported`),
+          skipped ? el('span', {}, `${skipped} skipped (duplicates or empty)`) : null, failed ? el('span', { class: 'bad' }, `${failed} couldn’t be imported`) : null),
+        problems.length ? el('details', { class: 'imp-problems' }, el('summary', {}, `Notes on ${problems.length} row${problems.length === 1 ? '' : 's'}`), el('ul', {}, problems.map((x) => el('li', {}, x)))) : null);
+      go.replaceWith(el('a', { class: 'btn primary', href: '#/t/' + spec.key, onclick: () => { closeDrawer(); setTimeout(render, 50); } }, `Open ${labelOf(spec)}`, icon('arrowR')));
+      const back = $('#drawer .drawer-foot .btn.ghost'); if (back) back.textContent = 'Import another file';
+      toast(`${ok.toLocaleString()} ${ok === 1 ? spec.single : 'records'} imported`);
+    }
+  }
+
+  function csvCell(v) { const x = v === null || v === undefined ? '' : String(v); return /[",\n\r]/.test(x) ? `"${x.replace(/"/g, '""')}"` : x; }
+  async function exportCSV(spec) {
+    const recs = await loadWithRefs(spec);
+    const keys = Object.keys(schemaOf(spec)).filter((k) => !(spec.hide || []).includes(k));
+    const lines = [keys.map((k) => csvCell(fieldLabel(spec, k))).join(',')];
+    recs.forEach((r) => lines.push(keys.map((k) => {
+      const v = r.payload[k];
+      const t = typeOf(spec, k);
+      return csvCell(t.base === 'REF' && v ? refLabel(t.target, v) : v);
+    }).join(',')));
+    const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv' });
+    const a = el('a', { href: URL.createObjectURL(blob), download: `${slug(labelOf(spec)) || 'export'}-${todayISO()}.csv` });
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    toast(`Exported ${recs.length} ${recs.length === 1 ? spec.single : 'records'}`);
+  }
+
+  function pageFoot(r) {
+    const spec = r.name === 'table' ? byKey[r.key] : null;
+    const target = spec && spec.key !== 'feed' ? spec.key : 'deals';
+    return el('footer', { class: 'page-foot' },
+      el('div', { class: 'pf-brand' }, el('img', { src: 'img/vault-logo.svg', width: 22, height: 22, alt: '' }), el('span', {}, 'VaultCRM')),
+      el('div', { class: 'pf-actions' },
+        el('button', { class: 'btn sm', type: 'button', onclick: () => openImport(target) }, icon('upload'), 'Import from CSV'),
+        spec && spec.key !== 'feed' ? el('button', { class: 'btn ghost sm', type: 'button', onclick: () => exportCSV(spec) }, icon('download'), 'Export CSV') : null));
   }
 
   // ---------------------------------------------------------------------

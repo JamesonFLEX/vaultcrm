@@ -98,3 +98,19 @@ test('update-schema adds fields and changes pick lists without dropping data', a
   const recs = await L.request('POST', '/api/vault/query-records', { registry_id: id });
   assert.equal(recs.body.records[0].payload.name, 'A');
 });
+
+test('bulk insert validates every row and bulk delete removes only listed ids', async () => {
+  const L = require('../public/local-engine.js');
+  L._reset();
+  const t = await L.request('POST', '/api/registry/create-table', { app_name: 'T', table_name: 'Jobs', fields_schema: { name: 'TEXT', kw: 'NUMBER' } });
+  const id = t.body.registry_id;
+  const ok = await L.request('POST', '/api/vault/bulk-insert', { registry_id: id, rows: [{ name: 'A', kw: 6 }, { name: 'B', kw: 7.2 }, { name: 'C' }] });
+  assert.equal(ok.status, 201);
+  assert.equal(ok.body.ids.length, 3);
+  const bad = await L.request('POST', '/api/vault/bulk-insert', { registry_id: id, rows: [{ name: 'D' }, { kw: 'not a number' }] });
+  assert.equal(bad.status, 400);
+  const del = await L.request('POST', '/api/vault/bulk-delete', { registry_id: id, ids: ok.body.ids.slice(0, 2) });
+  assert.equal(del.body.deleted, 2);
+  const left = await L.request('POST', '/api/vault/query-records', { registry_id: id });
+  assert.deepEqual(left.body.records.map((r) => r.payload.name), ['C']);
+});

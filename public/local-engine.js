@@ -300,6 +300,30 @@
       return { __status: 201, record: clone(rec), dropped_fields: dropped };
     },
 
+    'POST /api/vault/bulk-insert': async (b) => {
+      if (!Array.isArray(b.rows) || !b.rows.length || b.rows.length > 2000) throw new HttpError(400, 'rows must be an array of 1–2000 payloads');
+      const reg = getRegistry(b.registry_id);
+      const made = b.rows.map((p, i) => {
+        let clean;
+        try { clean = sanitizePayload(reg.fields_schema, p).clean; } catch (e) { e.message = `Row ${i + 1}: ${e.message}`; throw e; }
+        verifyRefs(reg.fields_schema, clean);
+        return { id: uuid(), registry_id: reg.id, payload: clean, date_created: now(), date_modified: now() };
+      });
+      state.records.push(...made);
+      await save();
+      return { __status: 201, ids: made.map((r) => r.id) };
+    },
+
+    'POST /api/vault/bulk-delete': async (b) => {
+      if (!Array.isArray(b.ids) || b.ids.length > 5000 || b.ids.some((x) => !isUuid(x))) throw new HttpError(400, 'ids must be an array of up to 5000 UUIDs');
+      const reg = getRegistry(b.registry_id);
+      const kill = new Set(b.ids.map((x) => x.toLowerCase()));
+      const before = state.records.length;
+      state.records = state.records.filter((r) => !(r.registry_id === reg.id && kill.has(r.id)));
+      await save();
+      return { deleted: before - state.records.length };
+    },
+
     'POST /api/vault/update-record': async (b) => {
       const reg = getRegistry(b.registry_id);
       const rec = findRecord(reg, b.record_id);
