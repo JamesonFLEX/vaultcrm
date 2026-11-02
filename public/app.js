@@ -880,7 +880,12 @@
     const sch = schemaOf(spec);
     const out = [{ id: 'newest', label: 'Newest first', v: (r) => r.date_created, dir: -1 }, { id: 'oldest', label: 'Oldest first', v: (r) => r.date_created, dir: 1 }];
     const dateField = (spec.card && spec.card.due) || ['follow_up', 'date_due', 'date', 'close_date', 'received', 'date_sent'].find((k) => k in sch);
-    if (dateField) out.push({ id: 'date', label: `Date (${fieldLabel(spec, dateField).replace(/\s*\(.*\)/, '')})`, v: (r) => r.payload[dateField] || null, dir: 1 });
+    if (dateField) {
+      // Logs (activities) read newest first; upcoming dates (follow-ups, due dates) read soonest first
+      const latest = spec.sort && spec.sort.field === dateField && spec.sort.dir < 0;
+      out.push({ id: 'date', label: `${fieldLabel(spec, dateField).replace(/\s*\(.*\)/, '')} (${latest ? 'latest first' : 'soonest first'})`, v: (r) => r.payload[dateField] || null, dir: latest ? -1 : 1 });
+      out.push({ id: 'date_rev', label: `${fieldLabel(spec, dateField).replace(/\s*\(.*\)/, '')} (${latest ? 'oldest first' : 'latest first'})`, v: (r) => r.payload[dateField] || null, dir: latest ? 1 : -1 });
+    }
     if (['address', 'company', 'location'].some((k) => k in sch) || spec.key === 'companies') out.push({ id: 'address', label: 'Address', v: (r) => addressOf(spec, r).replace(/^\d+\s+/, '').toLowerCase() || null, dir: 1 });
     if (spec.boardField) out.push({ id: 'days', label: 'Days in current stage (longest)', v: daysInStage, dir: -1 });
     if ('system_size_kw' in sch) out.push({ id: 'size', label: 'System size (largest)', v: (r) => (r.payload.system_size_kw == null ? null : Number(r.payload.system_size_kw)), dir: -1 });
