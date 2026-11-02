@@ -71,7 +71,13 @@
     check: 'M5 12.5l4.5 4.5L19 7.5',
     userPlus: 'M15 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M8.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M19 8v6M22 11h-6',
     door: 'M5 21V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v17M3 21h18M15 12h.01M9 7h6',
-    bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0'
+    bell: 'M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9M13.7 21a2 2 0 0 1-3.4 0',
+    chat: 'M21 12a8 8 0 0 1-11.6 7.1L4 21l1.9-5.4A8 8 0 1 1 21 12zM8 10h8M8 14h5',
+    flag: 'M5 21V4M5 4h11l-2 4 2 4H5',
+    panel: 'M3 7h18l-2 10H5zM9 7l-1 10M15 7l1 10M4 12h16',
+    wallet: 'M3 7a2 2 0 0 1 2-2h13v4M3 7v11a2 2 0 0 0 2 2h15V9H5a2 2 0 0 1-2-2zM16 14h.01',
+    pulse: 'M3 12h4l3-8 4 16 3-8h4',
+    mail2: 'M4 5h16a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1zM3 7l9 6 9-6'
   };
   function icon(name, cls = 'i') {
     const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -146,9 +152,18 @@
   // Workspace definition
   // ---------------------------------------------------------------------
   const APP = 'Workspace';
-  const STATUS = 'CHOICE:Site survey|Design|Permit|Install|Inspection|PTO|Paused';
   const STAGE_LIST = ['New lead', 'Follow-up', 'Appointment set', 'Proposal sent', 'Sold', 'Lost'];
-  const INSTALL_STEPS = ['Site survey', 'Design', 'Permit', 'Install', 'Inspection', 'PTO'];
+  const PROJECT_PHASES = [
+    ['Contract & design', ['Contract', 'Pre-install', 'Design', 'Revisions & NTP / M1', 'PIR']],
+    ['Pre-construction', ['MPU planning', 'Utility pre-check', 'Permit submitted', 'Permit approved', 'MPU']],
+    ['Install', ['Install scheduled', 'Install verification & post-install design', 'Post-install permitting', 'System activation & inspection']],
+    ['Close-out & service', ['PTO', 'M3', 'Closed', 'Service & monitoring']]
+  ];
+  const INSTALL_STEPS = PROJECT_PHASES.flatMap(([, steps]) => steps);
+  // Moving a project into these steps stamps the matching milestone date (if empty)
+  const STEP_DATE = { Contract: 'contract_date', 'Revisions & NTP / M1': 'ntp_m1_date', 'Permit approved': 'permit_approved_date',
+    'Install verification & post-install design': 'install_date', PTO: 'pto_date', M3: 'm3_date', Closed: 'closed_date' };
+  const STATUS = 'CHOICE:' + INSTALL_STEPS.concat('Paused').join('|');
   const STAGES = 'CHOICE:' + STAGE_LIST.join('|');
   const OUTCOMES = ['No answer', 'Left voicemail', 'Not home', 'Callback set', 'Appointment set', 'Proposal sent', 'Sold', 'Not interested'];
   const ACT_TYPES = ['Door knock', 'Call', 'Text', 'Email', 'Appointment', 'Follow-up visit'];
@@ -189,19 +204,47 @@
       fields: [f('subject', 'TEXT'), f('type', 'CHOICE:' + ACT_TYPES.join('|')), f('outcome', 'CHOICE:' + OUTCOMES.join('|') + '|Note'), f('deal', 'REF:@deals'),
         f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('rep', 'REF:@users'), f('date', 'DATE'), f('notes', 'LONGTEXT')],
       title: (p) => p.subject, columns: ['subject', 'type', 'outcome', 'deal', 'rep', 'date'], sort: { field: 'date', dir: -1 } },
-    { key: 'projects', table: 'Projects', label: 'Installs', single: 'install', icon: 'sun', group: 'Installs', view: 'board', boardField: 'status',
+    { key: 'projects', table: 'Projects', label: 'Projects', single: 'project', icon: 'sun', group: 'Projects', view: 'board', boardField: 'status',
       card: { due: 'date_due', dueWord: 'Due', owner: 'assigned_to', sub: 'company', note: 'url_details', value: null, stepOffset: 5 },
-      fields: [f('project_title', 'TEXT', { label: 'Install' }), f('status', STATUS, { label: 'Step' }), f('queue', 'TEXT', { ui: 'queue', label: 'Team' }), f('assigned_to', 'REF:@users'),
-        f('company', 'REF:@companies', { label: 'Homeowner' }), f('project_type', 'CHOICE:Solar|Solar + battery|Battery only|Panel upgrade', { label: 'System type' }), f('date_due', 'DATE'),
-        f('url', 'URL', { label: 'Design / plans link' }), f('url_details', 'TEXT', { label: 'Link notes' }), f('project_attachment', 'URL', { label: 'Permit / docs link' }), f('notes', 'LONGTEXT'),
-        f('deal', 'REF:@deals', { label: 'Sold deal' })],
+      fields: [f('project_title', 'TEXT', { label: 'Project' }), f('status', STATUS, { label: 'Step' }), f('queue', 'TEXT', { ui: 'queue', label: 'Team' }), f('assigned_to', 'REF:@users', { label: 'Responsible' }),
+        f('company', 'REF:@companies', { label: 'Homeowner' }), f('project_type', 'CHOICE:Solar|Solar + battery|Battery only|Panel upgrade', { label: 'System type' }), f('date_due', 'DATE', { label: 'Next action due' }),
+        f('url', 'URL', { label: 'Design / plans link' }), f('url_details', 'TEXT', { label: 'Current status note' }), f('project_attachment', 'URL', { label: 'Permit / docs link' }), f('notes', 'LONGTEXT'),
+        f('deal', 'REF:@deals', { label: 'Sold deal' }),
+        // Milestones
+        f('contract_date', 'DATE', { label: 'Contract signed' }), f('ntp_m1_date', 'DATE', { label: 'NTP / M1' }), f('permit_approved_date', 'DATE', { label: 'Permit approved' }),
+        f('install_date', 'DATE', { label: 'Install complete' }), f('pto_date', 'DATE', { label: 'PTO' }), f('m3_date', 'DATE', { label: 'M3' }), f('closed_date', 'DATE', { label: 'Closed' }),
+        // Equipment
+        f('system_size_kw', 'NUMBER', { label: 'System size (kW)' }), f('panel_model', 'TEXT', { label: 'Panel model' }), f('panel_count', 'NUMBER', { label: 'Panel count' }),
+        f('inverter', 'TEXT', { label: 'Inverter / optimizers' }), f('battery_model', 'TEXT', { label: 'Battery' }), f('racking', 'TEXT', { label: 'Racking' }),
+        // Funding
+        f('funding_source', 'CHOICE:PPA|Lease|Loan|Cash', { label: 'Funding source' }), f('funding_partner', 'TEXT', { label: 'Funding partner' }),
+        f('contract_value', 'NUMBER', { label: 'Contract value ($)' }), f('funding_notes', 'LONGTEXT', { label: 'Funding info' }),
+        // Adders
+        f('mpu_required', 'BOOLEAN', { label: 'MPU required' }), f('adders', 'LONGTEXT', { label: 'Adders (one per line)' }), f('adders_total', 'NUMBER', { label: 'Adders total ($)' }),
+        // Monitoring
+        f('monitoring_platform', 'TEXT', { label: 'Monitoring platform' }), f('monitoring_site_id', 'TEXT', { label: 'Site ID' }), f('monitoring_url', 'URL', { label: 'Monitoring link' }),
+        f('monitoring_status', 'CHOICE:Not set up|Online|Offline|Service needed', { label: 'Monitoring status' })],
+      sections: [
+        { title: 'Project', icon: 'sun', open: true, fields: ['project_title', 'status', 'assigned_to', 'queue', 'company', 'deal', 'project_type', 'date_due', 'url_details', 'notes'] },
+        { title: 'Project milestones', icon: 'flag', fields: ['contract_date', 'ntp_m1_date', 'permit_approved_date', 'install_date', 'pto_date', 'm3_date', 'closed_date'],
+          summary: (p) => { const done = ['contract_date', 'ntp_m1_date', 'permit_approved_date', 'install_date', 'pto_date', 'm3_date', 'closed_date'].filter((k) => p[k]).length; return `${done} of 7 done`; } },
+        { title: 'Equipment used', icon: 'panel', fields: ['system_size_kw', 'panel_count', 'panel_model', 'inverter', 'battery_model', 'racking'],
+          summary: (p) => [p.system_size_kw ? `${p.system_size_kw} kW` : '', p.panel_count ? `${p.panel_count} panels` : '', p.battery_model ? 'battery' : ''].filter(Boolean).join(' · ') },
+        { title: 'Funding source & info', icon: 'wallet', fields: ['funding_source', 'funding_partner', 'contract_value', 'funding_notes'],
+          summary: (p) => [p.funding_source, p.funding_partner, p.contract_value ? money(p.contract_value) : ''].filter(Boolean).join(' · ') },
+        { title: 'Adders', icon: 'plus', fields: ['mpu_required', 'adders', 'adders_total'],
+          summary: (p) => [p.mpu_required ? 'MPU' : '', p.adders ? `${String(p.adders).split('\n').filter(Boolean).length} adder(s)` : '', p.adders_total ? money(p.adders_total) : ''].filter(Boolean).join(' · ') },
+        { title: 'Monitoring', icon: 'pulse', fields: ['monitoring_status', 'monitoring_platform', 'monitoring_site_id', 'monitoring_url'],
+          summary: (p) => [p.monitoring_status, p.monitoring_platform].filter(Boolean).join(' · ') },
+        { title: 'Documents', icon: 'external', fields: ['url', 'project_attachment'] }
+      ],
       title: (p) => p.project_title,
-      columns: ['status', 'assigned_to', 'company', 'project_title', 'project_type', 'date_due', 'url', 'project_attachment'],
+      columns: ['status', 'assigned_to', 'company', 'project_title', 'project_type', 'date_due', 'funding_source', 'monitoring_status'],
       sort: { field: 'date_due', dir: 1 } },
-    { key: 'indi_projects', table: 'Indi Projects', label: 'My tasks', single: 'task', icon: 'folderUser', group: 'Installs',
-      fields: [f('project_title', 'TEXT', { label: 'Task' }), f('status', STATUS, { label: 'Step' }), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('date_due', 'DATE'), f('url', 'URL'), f('notes', 'LONGTEXT')],
+    { key: 'indi_projects', table: 'Indi Projects', label: 'My tasks', single: 'task', icon: 'folderUser', group: 'Notes',
+      fields: [f('project_title', 'TEXT', { label: 'Task' }), f('status', 'CHOICE:To do|In progress|Done'), f('assigned_to', 'REF:@users'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('date_due', 'DATE'), f('url', 'URL'), f('notes', 'LONGTEXT')],
       title: (p) => p.project_title, columns: ['project_title', 'status', 'assigned_to', 'company', 'date_due'], sort: { field: 'date_due', dir: 1 } },
-    { key: 'scripts_mail', table: 'Scripts Mail', label: 'Customer messages', single: 'message', icon: 'mail', group: 'Installs',
+    { key: 'scripts_mail', table: 'Scripts Mail', label: 'Customer messages', single: 'message', icon: 'mail', group: 'Projects',
       fields: [f('subject', 'TEXT'), f('status', 'CHOICE:New|In progress|Done'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('contact', 'REF:@contacts'), f('received', 'DATE'), f('script', 'LONGTEXT', { label: 'Message' })],
       title: (p) => p.subject, columns: ['subject', 'status', 'company', 'contact', 'received'] },
     { key: 'scripts_sent', table: 'Scripts Sent Mail', label: 'Sent proposals', single: 'sent proposal', icon: 'send', group: 'Sales',
@@ -216,6 +259,11 @@
     { key: 'sales_events', table: 'Sales Events', label: 'Canvass events', single: 'canvass event', icon: 'trend', group: 'Schedule', view: 'calendar', dateField: 'date',
       fields: [f('event', 'TEXT'), f('date', 'DATE'), f('status', 'CHOICE:Planned|Done|Cancelled'), f('company', 'REF:@companies', { label: 'Homeowner' }), f('value', 'NUMBER', { label: 'Doors knocked' }), f('notes', 'LONGTEXT')],
       title: (p) => p.event, columns: ['event', 'date', 'status', 'value'], sort: { field: 'date', dir: 1 } },
+    { key: 'feed', table: 'Chatter', label: 'Chatter', single: 'post', icon: 'chat', group: 'Notes', view: 'feed',
+      fields: [f('body', 'LONGTEXT', { label: 'Message' }), f('about', 'TEXT'), f('about_key', 'TEXT'), f('about_id', 'TEXT'),
+        f('author', 'REF:@users', { label: 'From' }), f('notify', 'REF:@users', { label: 'For' }), f('seen', 'BOOLEAN')],
+      hide: ['about_key', 'about_id'],
+      title: (p) => p.about || 'Post', columns: ['about', 'body', 'author', 'notify', 'seen'] },
     { key: 'notepad', table: 'Notepad', label: 'Notepad', single: 'note', icon: 'note', group: 'Notes', view: 'notes',
       fields: [f('title', 'TEXT'), f('body', 'LONGTEXT'), f('pinned', 'BOOLEAN')],
       title: (p) => p.title, columns: ['title', 'body', 'pinned'] }
@@ -227,11 +275,13 @@
     deals: { stage: { 'Demo set': 'Appointment set', Contacted: 'Follow-up', Negotiation: 'Proposal sent', Won: 'Sold' } },
     scriptbuilders: { kind: { Scriptbuilder: 'Pitch', Blast: 'Flyer' } },
     activities: { outcome: { 'Demo set': 'Appointment set', Gatekeeper: 'Not home' }, type: { Meeting: 'Appointment', Demo: 'Appointment' } },
-    projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO', 'On hold': 'Paused' },
+    projects: { status: { Intake: 'Pre-install', Scripting: 'Design', Production: 'Install scheduled', Review: 'Permit submitted', Delivered: 'PTO', 'On hold': 'Paused',
+        'Site survey': 'Pre-install', Permit: 'Permit submitted', Install: 'Install scheduled', Inspection: 'System activation & inspection' },
       project_type: { Implementation: null, 'Production only': null, 'Script update': null, Any: null } },
-    indi_projects: { status: { Intake: 'Site survey', Scripting: 'Design', Production: 'Install', Review: 'Permit', Delivered: 'PTO', 'On hold': 'Paused' } }
+    indi_projects: { status: { Intake: 'To do', Scripting: 'In progress', Production: 'In progress', Review: 'In progress', Delivered: 'Done', 'On hold': 'To do',
+      'Site survey': 'To do', Design: 'In progress', Permit: 'In progress', Install: 'In progress', Inspection: 'In progress', PTO: 'Done', Paused: 'To do' } }
   };
-  const GROUPS = ['Sales', 'Directory', 'Installs', 'Schedule', 'Notes', 'Custom'];
+  const GROUPS = ['Sales', 'Projects', 'Directory', 'Schedule', 'Notes', 'Custom'];
   const BOTTOM = ['home', 'deals', 'projects', 'calendar'];
 
   let specs = [];             // SPEC entries + custom tables, each with .reg
@@ -368,7 +418,7 @@
     if (y !== new Date().getFullYear()) opts.year = 'numeric';
     return dt.toLocaleDateString(undefined, opts);
   }
-  const DONE = new Set(['Delivered', 'PTO', 'Done', 'Cancelled', 'Won', 'Sold', 'Lost']);
+  const DONE = new Set(['Delivered', 'Done', 'Cancelled', 'Won', 'Sold', 'Lost', 'Closed', 'Service & monitoring']);
   const money = (n) => '$' + Math.round(Number(n) || 0).toLocaleString();
 
   function display(spec, field, rec) {
@@ -499,6 +549,7 @@
       else node = await renderTableView(byKey[r.key], r.params);
       if (token !== renderToken) return;
       view.replaceChildren(node);
+      updateBell();
       stagger(view);
       countUp(view);
     } catch (e) {
@@ -593,7 +644,7 @@
       tile('target', 255, 'Pipeline', money(sumVal(myOpen)) + ' open', '#/t/deals'),
       tile('calendar', 190, 'Calendar', apptsToday ? `${apptsToday} appt${apptsToday === 1 ? '' : 's'} today` : 'Appointments', '#/t/calendar', apptsToday || null),
       tile('home', 160, 'Homeowners', `${(cache.companies || []).length} on file`, '#/t/companies'),
-      tile('sun', 42, 'Installs', `${open.length} in progress`, '#/t/projects'),
+      tile('sun', 42, 'Projects', `${open.filter((r) => r.payload.status !== 'Paused').length} active`, '#/t/projects'),
       tile('layers', 290, 'Pitch & flyers', 'PDFs', '#/t/scriptbuilders'));
 
     // ---- Customer journey: one path from first knock to PTO ----
@@ -611,12 +662,16 @@
             if (st === 'Sold') return step(i + 1, 'Sold', soldMonth, 'this month', '#/t/deals?stage=Sold', 'sold');
             return step(i + 1, st, list.length, list.length ? money(sumVal(list)) : null, '#/t/deals?stage=' + encodeURIComponent(st), 'sale');
           }))),
-        el('div', { class: 'jhandoff', 'aria-hidden': 'true' }, el('span', { class: 'jline' }), icon('arrowR'), el('span', {}, 'Sold deals start an install automatically'), el('span', { class: 'jline' })),
-        el('div', { class: 'jlane install' }, el('div', { class: 'jlane-label' }, icon('sun'), 'Install'),
-          el('div', { class: 'jsteps', style: `--n:${INSTALL_STEPS.length}` }, INSTALL_STEPS.map((st, i) => {
-            const n = all.filter((r) => r.payload.status === st).length;
-            return step(salesSteps.length + i + 1, st, n, st === 'PTO' ? 'live systems' : null, '#/t/projects?stage=' + encodeURIComponent(st), st === 'PTO' ? 'pto' : 'inst');
-          })))));
+        el('div', { class: 'jhandoff', 'aria-hidden': 'true' }, el('span', { class: 'jline' }), icon('arrowR'), el('span', {}, 'Sold deals start a project automatically'), el('span', { class: 'jline' })),
+        el('div', { class: 'jlane install' }, el('div', { class: 'jlane-label' }, icon('sun'), 'Project'),
+          PROJECT_PHASES.map(([phase, steps]) => el('div', { class: 'jphase' },
+            el('div', { class: 'jphase-label' }, phase),
+            el('div', { class: 'jsteps', style: '--n:5' }, steps.map((st) => {
+              const n = all.filter((r) => r.payload.status === st).length;
+              const num = salesSteps.length + INSTALL_STEPS.indexOf(st) + 1;
+              const kind = st === 'PTO' ? 'pto' : st === 'Service & monitoring' ? 'svc' : 'inst';
+              return step(num, st, n, st === 'Service & monitoring' ? 'ongoing' : null, '#/t/projects?stage=' + encodeURIComponent(st), kind);
+            })))))));
 
     // Directory search
     const searchBox = (key) => {
@@ -709,7 +764,9 @@
             (spec.key === 'deals' || spec.key === 'activities') && hasSample() ? el('button', { class: 'btn', onclick: (e) => runSalesSample(e.currentTarget) }, 'Load sample deals') : null))));
     }
 
+    if (params.open) { const hit = recs.find((r) => r.id === params.open); if (hit) setTimeout(() => openRecord(spec, hit)); }
     if (spec.view === 'notes') return el('div', {}, head, renderNotes(spec, recs));
+    if (spec.view === 'feed') { await load(byKey.users); return el('div', {}, head, renderFeed(spec, recs)); }
     if (st.mode === 'calendar' && dateField) return el('div', {}, head, renderCalendar(spec, recs, dateField, st));
     if (st.mode === 'board' && spec.boardField) return el('div', {}, head, renderBoard(spec, recs, spec.boardField, st, params));
 
@@ -844,15 +901,18 @@
   async function moveStage(spec, rec, field, stage) {
     const patch = { [field]: stage };
     if ((stage === 'Sold' || stage === 'Lost') && 'close_date' in schemaOf(spec) && !rec.payload.close_date) patch.close_date = todayISO();
+    const stamp = spec.key === 'projects' && STEP_DATE[stage];
+    if (stamp && stamp in schemaOf(spec) && !rec.payload[stamp]) patch[stamp] = todayISO();
     try {
       await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
       delete cache[spec.key];
       let msg = `Moved to ${stage}`;
       if (spec.key === 'deals' && stage === 'Sold') {
         const made = await ensureInstall(Object.assign({}, rec, { payload: Object.assign({}, rec.payload, patch) }));
-        msg = `Sold: ${titleOf(spec, rec)}` + (made ? ' · install started at Site survey' : '');
+        msg = `Sold: ${titleOf(spec, rec)}` + (made ? ' · project started at Contract' : '');
       }
       if (spec.key === 'projects' && stage === 'PTO') msg = `PTO: ${titleOf(spec, rec)} is live`;
+      await postChatter(spec, rec, `Moved to ${stage}.`, respOf(Object.assign({}, rec.payload, patch)), true);
       toast(msg);
       await render();
       refreshCounts();
@@ -868,14 +928,132 @@
     const d = deal.payload;
     const due = (() => { const x = new Date(); x.setDate(x.getDate() + 7); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; })();
     const name = String(d.deal_name || 'New customer').split(' — ')[0];
-    await api('POST', '/api/vault/insert-record', { registry_id: P.reg.id, payload: Object.assign(
-      { project_title: `${name} — install`, status: 'Site survey', deal: deal.id, project_type: d.battery ? 'Solar + battery' : 'Solar', date_due: due },
-      settings.queues[0] ? { queue: settings.queues[0] } : {}, d.company ? { company: d.company } : {}) });
+    const sch = schemaOf(P);
+    const extra = { contract_date: todayISO(), system_size_kw: d.system_size_kw, funding_source: d.financing, contract_value: d.value };
+    Object.keys(extra).forEach((k) => { if (!(k in sch) || extra[k] === undefined || extra[k] === null || extra[k] === '') delete extra[k]; });
+    const r = await api('POST', '/api/vault/insert-record', { registry_id: P.reg.id, payload: Object.assign(
+      { project_title: `${name} — project`, status: 'Contract', deal: deal.id, project_type: d.battery ? 'Solar + battery' : 'Solar', date_due: due },
+      extra, settings.queues[0] ? { queue: settings.queues[0] } : {}, d.company ? { company: d.company } : {}) });
+    await postChatter(P, r.record, `New project from sold deal ${d.deal_name || ''}. Starting at Contract.`.replace(/\s+\./, '.'), null, true);
     if (d.company && byKey.companies) {
       try { await api('POST', '/api/vault/update-record', { registry_id: byKey.companies.reg.id, record_id: d.company, payload: { status: 'Customer' } }); delete cache.companies; } catch (_) {}
     }
     delete cache.projects;
     return true;
+  }
+
+  // ---------------------------------------------------------------------
+  // Chatter: notes on any record that notify the responsible teammate
+  // ---------------------------------------------------------------------
+  const respOf = (p) => (p && (p.assigned_to || p.owner || p.rep)) || null;
+  const userRec = (id) => (cache.users || []).find((u) => u.id === id);
+  const userName = (id) => { const u = userRec(id); return u ? u.payload.name || 'Teammate' : null; };
+  const appLink = (key, id) => `${location.origin}${location.pathname}#/t/${key}?open=${id}`;
+  async function postChatter(spec, rec, body, notify, auto) {
+    const F = byKey.feed;
+    if (!F || !rec || spec.key === 'feed' || !String(body || '').trim()) return null;
+    const payload = { body: String(body).trim().slice(0, 9000), about: titleOf(spec, rec), about_key: spec.key, about_id: rec.id, seen: false };
+    if (settings.meId) payload.author = settings.meId;
+    if (notify && notify !== settings.meId) payload.notify = notify;
+    if (auto && !payload.notify) return null; // automatic posts only when someone needs to act
+    try { const r = await api('POST', '/api/vault/insert-record', { registry_id: F.reg.id, payload }); delete cache.feed; return r.record; } catch (_) { return null; }
+  }
+  function shareLinks(post) {
+    const u = userRec(post.payload.notify);
+    if (!u) return null;
+    const msg = `${post.payload.about}: ${post.payload.body}\n${appLink(post.payload.about_key, post.payload.about_id)}`;
+    const phone = String(u.payload.phone || '').replace(/[^\d+]/g, '');
+    return el('span', { class: 'post-send' },
+      phone ? el('a', { class: 'chip sm', href: `sms:${phone}?&body=${encodeURIComponent(msg)}`, onclick: (e) => e.stopPropagation() }, icon('chat'), 'Text ' + (u.payload.name || '').split(' ')[0]) : null,
+      u.payload.email ? el('a', { class: 'chip sm', href: `mailto:${u.payload.email}?subject=${encodeURIComponent('VaultCRM: ' + post.payload.about)}&body=${encodeURIComponent(msg)}`, onclick: (e) => e.stopPropagation() }, icon('mail2'), 'Email') : null);
+  }
+  function postView(post, showAbout) {
+    const p = post.payload;
+    const from = userName(p.author) || 'Someone';
+    const when = new Date(post.date_created);
+    return el('article', { class: 'post' + (p.notify === settings.meId && !p.seen ? ' unread' : '') },
+      el('span', { class: 'post-av' }, initials(from)),
+      el('div', { class: 'post-main' },
+        el('div', { class: 'post-meta' }, el('b', {}, from),
+          p.notify ? el('span', { class: 'post-for' }, icon('arrowR'), userName(p.notify) || 'Teammate') : null,
+          el('time', { datetime: post.date_created, title: when.toLocaleString() }, fmtWhen(when))),
+        showAbout ? el('a', { class: 'post-about', href: `#/t/${p.about_key}?open=${p.about_id}`, onclick: () => markSeen(post) }, p.about) : null,
+        el('p', { class: 'post-body' }, p.body),
+        p.notify && p.notify !== settings.meId ? shareLinks(post) : null));
+  }
+  function fmtWhen(d) {
+    const mins = Math.round((Date.now() - d.getTime()) / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    if (mins < 60 * 24) return `${Math.round(mins / 60)}h ago`;
+    return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  }
+  async function markSeen(post) {
+    if (!post || post.payload.seen || post.payload.notify !== settings.meId) return;
+    try { await api('POST', '/api/vault/update-record', { registry_id: byKey.feed.reg.id, record_id: post.id, payload: { seen: true } }); post.payload.seen = true; updateBell(); } catch (_) {}
+  }
+  async function chatterSection(spec, rec) {
+    if (!byKey.feed) return null;
+    await Promise.all([load(byKey.feed), load(byKey.users)]);
+    const posts = (cache.feed || []).filter((r) => r.payload.about_key === spec.key && r.payload.about_id === rec.id)
+      .sort((a, b) => (a.date_created < b.date_created ? 1 : -1));
+    posts.forEach(markSeen);
+    const text = el('textarea', { class: 'textarea', rows: 2, placeholder: 'Write a note… the person below gets notified', 'aria-label': 'Chatter note' });
+    const users = (cache.users || []).filter((u) => u.payload.active !== false);
+    const who = el('select', { class: 'select', 'aria-label': 'Notify' }, el('option', { value: '' }, 'No one'),
+      users.map((u) => el('option', { value: u.id, selected: u.id === respOf(rec.payload) }, u.payload.name || 'Teammate')));
+    const list = el('div', { class: 'posts' }, posts.length ? posts.slice(0, 20).map((x) => postView(x)) : el('p', { class: 'hint', style: 'margin:0' }, 'No notes yet. Post one to loop in the team.'));
+    const btn = el('button', { class: 'btn primary sm', type: 'button', onclick: async () => {
+      if (!text.value.trim()) { text.focus(); return; }
+      btn.disabled = true;
+      const made = await postChatter(spec, rec, text.value, who.value || null, false);
+      btn.disabled = false;
+      if (!made) { toast('Couldn’t post that note', true); return; }
+      text.value = '';
+      const hint = list.querySelector('.hint'); if (hint) hint.remove();
+      list.prepend(postView(made));
+      toast(made.payload.notify ? `Posted · ${userName(made.payload.notify)} notified` : 'Posted');
+      updateBell();
+    } }, icon('send'), 'Post');
+    return el('div', { class: 'chatter wide' },
+      el('h3', {}, icon('chat'), 'Chatter', el('span', {}, posts.length)),
+      text,
+      el('div', { class: 'chatter-row' }, el('label', { class: 'ql-fu' }, el('span', {}, 'Notify'), who), btn),
+      list);
+  }
+  async function updateBell() {
+    const b = $('#bellBtn');
+    if (!b || !byKey.feed) return;
+    try { await load(byKey.feed); } catch (_) { return; }
+    const n = settings.meId ? (cache.feed || []).filter((r) => r.payload.notify === settings.meId && !r.payload.seen).length : 0;
+    const badge = b.querySelector('.bell-n');
+    if (badge) badge.remove();
+    if (n) b.append(el('span', { class: 'bell-n' }, n > 99 ? '99+' : n));
+    b.setAttribute('aria-label', n ? `Notifications, ${n} unread` : 'Notifications');
+  }
+  async function openInbox() {
+    await Promise.all([load(byKey.feed, true), load(byKey.users)]);
+    const mine = settings.meId ? (cache.feed || []).filter((r) => r.payload.notify === settings.meId) : [];
+    mine.sort((a, b) => (a.payload.seen === b.payload.seen ? (a.date_created < b.date_created ? 1 : -1) : a.payload.seen ? 1 : -1));
+    const unread = mine.filter((r) => !r.payload.seen);
+    showDrawer(
+      el('div', { class: 'drawer-head' },
+        el('div', {}, el('div', { class: 'eyebrow' }, 'Chatter'), el('h2', { id: 'drawerTitle' }, 'Notifications')),
+        el('button', { class: 'icon-btn', onclick: closeDrawer, 'aria-label': 'Close' }, icon('x'))),
+      el('div', { class: 'drawer-body' },
+        !settings.meId ? el('p', { class: 'hint wide' }, 'Choose who you are in Settings to get notifications.') : null,
+        settings.meId && !mine.length ? el('p', { class: 'hint wide' }, 'Nothing for you yet. Notes your team posts for you show up here.') : null,
+        el('div', { class: 'posts wide inbox' }, mine.slice(0, 50).map((x) => {
+          const v = postView(x, true);
+          v.addEventListener('click', (e) => { if (e.target.closest('a')) return; markSeen(x); closeDrawer(); go(`#/t/${x.payload.about_key}?open=${x.payload.about_id}`); });
+          return v;
+        }))),
+      el('div', { class: 'drawer-foot' }, el('a', { class: 'btn ghost', href: '#/t/feed', onclick: closeDrawer }, 'All Chatter'), el('span', { class: 'spacer' }),
+        unread.length ? el('button', { class: 'btn', onclick: async () => { for (const x of unread) await markSeen(x); closeDrawer(); toast('All caught up'); } }, icon('check'), 'Mark all read') : null));
+  }
+  function renderFeed(spec, recs) {
+    const sorted = recs.slice().sort((a, b) => (a.date_created < b.date_created ? 1 : -1));
+    return el('div', { class: 'card reveal' }, el('div', { class: 'posts' }, sorted.slice(0, 200).map((x) => postView(x, true))));
   }
 
   // One-tap disposition (SalesRabbit-style): logs an activity, then nudges the deal forward
@@ -906,7 +1084,7 @@
         if (Object.keys(patch).length) await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: patch });
         delete cache.activities; delete cache[spec.key];
         const made = to === 'Sold' ? await ensureInstall(Object.assign({}, rec, { payload: Object.assign({}, p, patch) })) : false;
-        toast(`Logged ${outcome}` + (to ? ` · moved to ${to}` : '') + (made ? ' · install started' : ''));
+        toast(`Logged ${outcome}` + (to ? ` · moved to ${to}` : '') + (made ? ' · project started' : ''));
         closeDrawer();
         await render();
         refreshCounts();
@@ -1035,7 +1213,8 @@
     const form = el('form', { class: 'drawer-body', novalidate: true, onsubmit: (e) => { e.preventDefault(); save(); } },
       errorBox,
       rec && spec.key === 'deals' && byKey.activities ? quickLog(spec, rec) : null,
-      fields.map((k) => {
+      rec && !['feed', 'notepad'].includes(spec.key) ? await chatterSection(spec, rec) : null,
+      layoutFields(fields.map((k) => {
         const t = typeOf(spec, k);
         const wide = k === titleField || t.base === 'LONGTEXT';
         if (t.base === 'BOOLEAN') {
@@ -1044,10 +1223,27 @@
         return el('label', { class: 'field' + (wide ? ' wide' : ''), for: 'f_' + k },
           el('span', {}, fieldLabel(spec, k), t.base === 'REF' || t.base === 'CHOICE' || t.base === 'TEXT' || t.base === 'LONGTEXT' ? null : el('em', {}, t.base.toLowerCase())),
           inputFor(spec, k, values[k]));
-      }),
+      }), fields),
       rec ? el('div', { class: 'meta-line' }, `Created ${new Date(rec.date_created).toLocaleString()} · Updated ${new Date(rec.date_modified).toLocaleString()}`) : null,
       rec ? await relatedSection(spec, rec) : null,
       el('button', { type: 'submit', hidden: true }));
+
+    // Group fields into collapsible sections when the table defines them (e.g. Projects)
+    function layoutFields(nodes, keys) {
+      if (!spec.sections) return nodes;
+      const byField = Object.fromEntries(keys.map((k, i) => [k, nodes[i]]));
+      const used = new Set();
+      const groups = spec.sections.map((sec) => {
+        const items = sec.fields.filter((k) => byField[k]).map((k) => { used.add(k); return byField[k]; });
+        if (!items.length) return null;
+        const sum = sec.summary ? sec.summary(values) : '';
+        return el('details', { class: 'fsec wide', open: sec.open || isNew ? true : null },
+          el('summary', {}, el('span', { class: 'fsec-ic' }, icon(sec.icon || 'grid')), el('b', {}, sec.title), sum ? el('small', {}, sum) : null),
+          el('div', { class: 'fsec-body' }, items));
+      });
+      const rest = keys.filter((k) => !used.has(k)).map((k) => byField[k]);
+      return [groups, rest.length ? el('details', { class: 'fsec wide' }, el('summary', {}, el('span', { class: 'fsec-ic' }, icon('grid')), el('b', {}, 'More')), el('div', { class: 'fsec-body' }, rest)) : null];
+    }
 
     const saveBtn = el('button', { class: 'btn primary', onclick: save }, isNew ? `Create ${spec.single}` : 'Save changes');
     const foot = el('div', { class: 'drawer-foot' },
@@ -1078,11 +1274,19 @@
       saveBtn.disabled = true;
       errorBox.hidden = true;
       try {
-        if (isNew) await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload: collect() });
-        else await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload: collect() });
+        const payload = collect();
+        let saved;
+        if (isNew) saved = (await api('POST', '/api/vault/insert-record', { registry_id: spec.reg.id, payload })).record;
+        else saved = (await api('POST', '/api/vault/update-record', { registry_id: spec.reg.id, record_id: rec.id, payload })).record;
         delete cache[spec.key];
+        // New or changed notes become a Chatter post for whoever owns the next action
+        let pinged = null;
+        if (saved && 'notes' in schemaOf(spec) && payload.notes && payload.notes !== (rec ? rec.payload.notes : undefined)) {
+          const post = await postChatter(spec, saved, payload.notes, respOf(saved.payload), true);
+          if (post && post.payload.notify) pinged = userName(post.payload.notify);
+        }
         closeDrawer();
-        toast(isNew ? `${humanize(spec.single)} created` : 'Changes saved');
+        toast((isNew ? `${humanize(spec.single)} created` : 'Changes saved') + (pinged ? ` · ${pinged} notified` : ''));
         await render();
         refreshCounts();
       } catch (e) {
@@ -1182,14 +1386,23 @@
       ['activities', 'a5', { subject: 'Appointment — Sold', type: 'Appointment', outcome: 'Sold', deal: '@d6', company: '@c5', contact: '@p6', rep: '@u1', date: day(0) }],
       ['activities', 'a6', { subject: 'Follow-up visit — Callback set', type: 'Follow-up visit', outcome: 'Callback set', deal: '@d5', rep: '@u1', date: day(-1) }],
 
-      ['projects', 'j1', { project_title: 'Patel — install', status: 'Site survey', queue: Q(0), assigned_to: '@u3', company: '@c5', deal: '@d6', project_type: 'Solar', date_due: day(3), url_details: 'Survey booked Thursday 10am' }],
-      ['projects', 'j2', { project_title: 'Kim — install', status: 'Inspection', queue: Q(3), assigned_to: '@u3', company: '@c6', deal: '@d8', project_type: 'Solar', date_due: day(-1), url_details: 'Waiting on city inspector' }],
-      ['projects', 'j3', { project_title: 'Alvarez — install', status: 'PTO', queue: Q(3), assigned_to: '@u3', project_type: 'Solar + battery', date_due: day(-12), url_details: 'Permission to operate granted' }],
-      ['projects', 'j4', { project_title: 'Brennan — install', status: 'Design', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(5), url: 'https://example.com/designs/brennan', url_details: 'Design draft ready for review' }],
-      ['projects', 'j5', { project_title: 'Whitaker — install', status: 'Permit', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(10), url_details: 'Submitted to the city' }],
-      ['projects', 'j6', { project_title: 'Castillo — install', status: 'Install', queue: Q(2), assigned_to: '@u3', project_type: 'Solar + battery', date_due: day(2), url_details: 'Crew scheduled' }],
+      ['projects', 'j1', { project_title: 'Patel — project', status: 'Pre-install', queue: Q(0), assigned_to: '@u3', company: '@c5', deal: '@d6', project_type: 'Solar', date_due: day(3), url_details: 'Site survey booked Thursday 10am',
+        contract_date: day(0), system_size_kw: 6.4, panel_count: 16, panel_model: 'Sample 400W mono panel', inverter: 'Sample microinverters', racking: 'Sample rail kit',
+        funding_source: 'PPA', funding_partner: 'Sample PPA Partner', contract_value: 22000, funding_notes: 'Sample terms only.\nCredit approved; docs signed.',
+        mpu_required: false, adders: 'Critter guard\nTrenching (sample)', adders_total: 900, monitoring_status: 'Not set up', monitoring_platform: 'Sample monitoring app' }],
+      ['projects', 'j2', { project_title: 'Kim — project', status: 'System activation & inspection', queue: Q(3), assigned_to: '@u3', company: '@c6', deal: '@d8', project_type: 'Solar', date_due: day(-1), url_details: 'Waiting on city inspector',
+        contract_date: day(-45), ntp_m1_date: day(-38), permit_approved_date: day(-20), install_date: day(-6), system_size_kw: 5.2, panel_count: 13, funding_source: 'PPA', monitoring_status: 'Offline' }],
+      ['projects', 'j3', { project_title: 'Alvarez — project', status: 'Service & monitoring', queue: Q(4), assigned_to: '@u1', project_type: 'Solar + battery', date_due: day(30), url_details: 'Annual check-in',
+        contract_date: day(-140), ntp_m1_date: day(-130), permit_approved_date: day(-100), install_date: day(-80), pto_date: day(-60), m3_date: day(-50), closed_date: day(-45), monitoring_status: 'Online', monitoring_platform: 'Sample monitoring app', monitoring_site_id: 'SAMPLE-0042' }],
+      ['projects', 'j4', { project_title: 'Brennan — project', status: 'Revisions & NTP / M1', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(2), url: 'https://example.com/designs/brennan', url_details: 'Homeowner asked to move two panels', contract_date: day(-12) }],
+      ['projects', 'j5', { project_title: 'Whitaker — project', status: 'Permit submitted', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(10), url_details: 'Submitted to the city', contract_date: day(-30), ntp_m1_date: day(-22), mpu_required: true }],
+      ['projects', 'j6', { project_title: 'Castillo — project', status: 'Install scheduled', queue: Q(2), assigned_to: '@u3', project_type: 'Solar + battery', date_due: day(2), url_details: 'Crew booked', contract_date: day(-50), ntp_m1_date: day(-44), permit_approved_date: day(-8) }],
+      ['projects', 'j7', { project_title: 'Ortiz — project', status: 'MPU planning', queue: Q(1), assigned_to: '@u3', project_type: 'Solar', date_due: day(4), url_details: 'Panel is 100A, needs upgrade', contract_date: day(-20), ntp_m1_date: day(-15), mpu_required: true }],
+      ['projects', 'j8', { project_title: 'Hughes — project', status: 'PTO', queue: Q(3), assigned_to: '@u3', project_type: 'Solar', date_due: day(-3), contract_date: day(-90), ntp_m1_date: day(-80), permit_approved_date: day(-60), install_date: day(-30), pto_date: day(-3) }],
 
-
+      ['feed', 'f1', { body: 'Site survey is booked for Thursday 10am. Please confirm the crew.', about: 'Patel — project', about_key: 'projects', about_id: '@j1', author: '@u1', notify: '@u3', seen: false }],
+      ['feed', 'f2', { body: 'Homeowner wants to move two panels off the front roof. New design needed before NTP.', about: 'Brennan — project', about_key: 'projects', about_id: '@j4', author: '@u1', notify: '@u3', seen: false }],
+      ['feed', 'f3', { body: 'Monitoring shows offline since yesterday. Can you check the gateway on your visit?', about: 'Kim — project', about_key: 'projects', about_id: '@j2', author: '@u3', notify: '@u1', seen: false }],
 
       ['scripts_mail', 'm1', { subject: 'Utility bills — Martinez', status: 'In progress', company: '@c1', contact: '@p1', received: day(-3), script: 'Sent the last 12 months of PG&E bills for the proposal.' }],
       ['scripts_mail', 'm2', { subject: 'Battery question — Nguyen', status: 'New', company: '@c2', contact: '@p3', received: day(-1), script: 'Wants to know how a battery works during an outage.' }],
@@ -1265,7 +1478,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 3;
+  const SAMPLE_VERSION = 4;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -1552,6 +1765,8 @@
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
       navigator.serviceWorker.register('sw.js').catch(() => {});
     }
+    const bell = el('button', { class: 'icon-btn bell-btn', id: 'bellBtn', 'aria-label': 'Notifications', onclick: openInbox }, icon('bell'));
+    $('#themeBtn').before(bell);
     const pill = $('#modePill');
     try {
       await api('GET', '/api/health');

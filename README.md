@@ -44,7 +44,7 @@ Dockerfile            App image
 
 ## The workspace
 
-Tabs: **Home** (illustrated quick access + customer journey), **Sales pipeline** (New lead → Follow-up → Appointment set → Proposal sent → Sold / Lost), **Activities** (one-tap door-knock and call outcomes), **Homeowners**, **Properties**, **Contacts**, **Installs** (Site survey → Design → Permit → Install → Inspection → PTO; a Sold deal starts its install automatically), **Calendar**, **Canvass events**, **Partners**, **Notepad**, plus custom tables.
+Tabs: **Home** (illustrated quick access + customer journey), **Sales pipeline** (New lead → Follow-up → Appointment set → Proposal sent → Sold / Lost), **Activities** (one-tap door-knock and call outcomes), **Projects** (Contract → Pre-install → Design → Revisions & NTP / M1 → PIR → MPU planning → Utility pre-check → Permit submitted → Permit approved → MPU → Install scheduled → Install verification & post-install design → Post-install permitting → System activation & inspection → PTO → M3 → Closed → Service & monitoring; each project has Milestones, Equipment, Funding, Adders and Monitoring sections; a Sold deal starts its project automatically), **Chatter** (notes on any record that notify the responsible teammate, with a bell inbox and text/email handoff), **Homeowners**, **Properties**, **Contacts**, **Calendar**, **Canvass events**, **Partners**, **My tasks**, **Notepad**, plus custom tables.
 
 - **Home:** queue tally board with live open-project counts, company/location/contact search, quick actions, and your assigned projects
 - **Any record:** opens a side panel to edit it, plus every linked record (for example, a company's contacts and projects)
