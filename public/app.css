@@ -1063,3 +1063,28 @@ table.grid { width: 100%; border-collapse: separate; border-spacing: 0 6px; font
 :root[data-theme="light"] .vis-private { color: hsl(30 90% 34%); }
 
 .sort-wrap > span { white-space: nowrap; }
+
+/* Teams & access */
+.access-page { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; max-width: 1100px; }
+.access-page > * { min-width: 0; }
+.acc-scroll { overflow-x: auto; }
+table.acc { border-collapse: separate; border-spacing: 0; min-width: 100%; font-size: 13.5px; }
+.acc th, .acc td { padding: 10px 12px; text-align: center; border-bottom: 1px solid var(--edge); }
+.acc thead th { font: 600 12px var(--f-body); color: var(--muted); vertical-align: bottom; min-width: 96px; }
+.acc tbody th { text-align: left; font-weight: 700; white-space: nowrap; }
+.acc thead th:first-child { text-align: left; }
+.acc-box { position: relative; display: inline-grid; place-items: center; cursor: pointer; }
+.acc-box input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.acc-box i { width: 26px; height: 26px; border-radius: 8px; background: var(--glass-3); box-shadow: inset 0 0 0 1.5px var(--edge-strong); display: grid; place-items: center; transition: background .2s; }
+.acc-box input:checked + i { background: linear-gradient(135deg, var(--red-hot), var(--red)); box-shadow: none; }
+.acc-box input:checked + i::after { content: ""; width: 10px; height: 6px; border-left: 2.5px solid #fff; border-bottom: 2.5px solid #fff; transform: translateY(-2px) rotate(-45deg); }
+.acc-box input:focus-visible + i { outline: 2px solid var(--red); outline-offset: 2px; }
+.acc-box.own { cursor: not-allowed; opacity: .6; }
+.teams { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.team { padding: 14px; border-radius: 20px; background: var(--glass-3); box-shadow: inset 0 0 0 1px var(--edge); display: grid; gap: 10px; align-content: start; }
+.team-head { display: flex; align-items: center; gap: 8px; }
+.team-people { display: grid; gap: 8px; }
+.team-person { display: grid; grid-template-columns: 34px minmax(0, 1fr) minmax(0, 190px); align-items: center; gap: 10px; font-weight: 600; font-size: 14px; }
+.team-person .select { height: 36px; padding-top: 0; padding-bottom: 0; font-size: 13px; }
+@media (max-width: 860px) { .team-person { grid-template-columns: 34px minmax(0, 1fr) minmax(0, 170px); } .acc thead th { min-width: 0; } .acc th, .acc td { padding: 10px 6px; } .acc tbody th { white-space: normal; font-size: 13px; } }
+.acc-corner { font-weight: 600; color: var(--faint); font-size: 11.5px; }

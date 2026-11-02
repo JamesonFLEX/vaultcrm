@@ -522,14 +522,15 @@
     const parts = path.split('/');
     if (parts[0] === 't' && byKey[parts[1]]) return { name: 'table', key: parts[1], params };
     if (parts[0] === 'new') return { name: 'new', params };
+    if (parts[0] === 'access') return { name: 'access', params };
     return { name: 'home', params };
   }
   const go = (hash) => { location.hash = hash; };
 
   function navItem(key, label, ic, count, extraClass) {
     const r = route();
-    const current = (key === 'home' && r.name === 'home') || (key === 'new' && r.name === 'new') || (r.name === 'table' && r.key === key);
-    const href = key === 'home' ? '#/' : key === 'new' ? '#/new' : '#/t/' + key;
+    const current = (key === 'home' && r.name === 'home') || (key === 'new' && r.name === 'new') || (key === 'access' && r.name === 'access') || (r.name === 'table' && r.key === key);
+    const href = key === 'home' ? '#/' : key === 'new' ? '#/new' : key === 'access' ? '#/access' : '#/t/' + key;
     return el('a', { class: 'nav-item' + (extraClass ? ' ' + extraClass : ''), href, 'aria-current': current ? 'page' : null, onclick: closeRail },
       icon(ic), el('span', {}, label), count !== undefined ? el('span', { class: 'count' }, count) : null);
   }
@@ -544,7 +545,7 @@
     nav.replaceChildren(
       navItem('home', 'Home', 'home'),
       ...groups.filter(Boolean),
-      el('div', { class: 'nav-group' }, navItem('new', 'New table', 'plus', undefined, 'add'))
+      el('div', { class: 'nav-group' }, el('div', { class: 'nav-label' }, 'Admin'), navItem('access', 'Teams & access', 'users'), navItem('new', 'New table', 'plus', undefined, 'add'))
     );
     $('#wsName').textContent = settings.workspace || 'Workspace';
 
@@ -580,6 +581,7 @@
       let node;
       if (r.name === 'home') node = await renderHome();
       else if (r.name === 'new') node = renderBuilder();
+      else if (r.name === 'access') node = await renderAccess();
       else node = await renderTableView(byKey[r.key], r.params);
       if (token !== renderToken) return;
       if (r.name !== 'new') node.append(pageFoot(r));
@@ -828,7 +830,8 @@
       const defSel = el('select', { class: 'select sort-sel', 'aria-label': 'New activities visible to' },
         [['all', 'Everyone'], ...roles.map((r) => ['team:' + r, teamLabel(r)]), ['private', 'Private']].map(([v, l]) => el('option', { value: v, selected: actDefault() === v }, l)));
       defSel.addEventListener('change', () => { settings.actDefault = defSel.value; saveSettings(); toast(`New activities visible to ${visLabel(defSel.value).toLowerCase()}`); });
-      teamCtl = [el('label', { class: 'sort-wrap' }, icon('users'), el('span', {}, 'Team'), teamSel),
+      teamCtl = [el('a', { class: 'btn sm', href: '#/access' }, icon('users'), 'Teams & access'),
+        el('label', { class: 'sort-wrap' }, icon('users'), el('span', {}, 'Team'), teamSel),
         el('label', { class: 'sort-wrap' }, icon('pin'), el('span', {}, 'New visible to'), defSel)];
     }
     const chips = chipField ? el('div', { class: 'chips', role: 'group', 'aria-label': fieldLabel(spec, chipField) },
@@ -1181,14 +1184,22 @@
   // Activity visibility: 'all' | 'team:<role>' | 'private'. The rep and Admins always see their own.
   const actDefault = () => settings.actDefault || 'all';
   const actVis = () => (actDefault() !== 'all' ? { visible_to: actDefault() } : {});
+  // Team access rules: settings.access[viewerRole] = roles whose activities that team can see (missing = all)
+  function teamCanSee(viewerRole, repRole) {
+    const rules = settings.access || {};
+    if (!viewerRole || viewerRole === 'Admin' || !Array.isArray(rules[viewerRole])) return true;
+    return !repRole || rules[viewerRole].includes(repRole);
+  }
   function canSeeActivity(r) {
     const a = r.payload.visible_to || 'all';
-    if (a === 'all') return true;
     const me = settings.meId;
-    if (!me) return false;
-    if (r.payload.rep === me) return true;
-    const u = userRec(me);
+    if (me && r.payload.rep === me) return true;
+    const u = me ? userRec(me) : null;
     if (u && u.payload.role === 'Admin') return true;
+    const repU = userRec(r.payload.rep);
+    if (u && !teamCanSee(u.payload.role, repU && repU.payload.role)) return false;
+    if (a === 'all') return true;
+    if (!me) return false;
     if (a.startsWith('team:')) return !!u && u.payload.role === a.slice(5);
     return false;
   }
@@ -2449,6 +2460,72 @@
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
   const SAMPLE_VERSION = 14;
+
+  // ---------------------------------------------------------------------
+  // Teams & access: who is on each team, and whose activities each team can see
+  // ---------------------------------------------------------------------
+  async function renderAccess() {
+    setCrumbs(settings.workspace || 'Workspace', 'Teams & access');
+    await Promise.all([load(byKey.users), load(byKey.activities)]);
+    const users = (cache.users || []).filter((u) => u.payload.active !== false);
+    const roleOpts = typeOf(byKey.users, 'role').options;
+    const roles = roleOpts.filter((r) => users.some((u) => u.payload.role === r));
+    const rules = Object.assign({}, settings.access || {});
+    const allowed = (viewer) => (Array.isArray(rules[viewer]) ? rules[viewer] : roles.slice());
+    const saveRules = (msg) => { settings.access = rules; saveSettings(); toast(msg || 'Access saved'); };
+
+    const teams = el('section', { class: 'card reveal' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Teams'), el('span', { class: 'eyebrow', style: 'margin-left:auto' }, 'A person’s team is their role')),
+      el('div', { class: 'teams' }, roles.map((r) => el('div', { class: 'team' },
+        el('div', { class: 'team-head' }, el('b', {}, teamLabel(r)), el('span', { class: 'kcount' }, users.filter((u) => u.payload.role === r).length)),
+        el('div', { class: 'team-people' }, users.filter((u) => u.payload.role === r).map((u) => {
+          const sel = el('select', { class: 'select', 'aria-label': `Team for ${u.payload.name}` }, roleOpts.map((o) => el('option', { value: o, selected: o === u.payload.role }, teamLabel(o))));
+          sel.addEventListener('change', async () => {
+            try { await api('POST', '/api/vault/update-record', { registry_id: byKey.users.reg.id, record_id: u.id, payload: { role: sel.value } }); delete cache.users; toast(`${u.payload.name} moved to ${teamLabel(sel.value)}`); render(); }
+            catch (e) { toast(e.message, true); }
+          });
+          return el('div', { class: 'team-person' }, el('span', { class: 'post-av' }, initials(u.payload.name || '?')), el('span', {}, u.payload.name || 'Teammate'), sel);
+        }))))));
+
+    // Matrix: rows = viewer team, columns = whose activities
+    const viewers = roles.filter((r) => r !== 'Admin');
+    const matrix = el('div', { class: 'acc-scroll' }, el('table', { class: 'acc' },
+      el('thead', {}, el('tr', {}, el('th', {}, el('span', { class: 'acc-corner' }, 'Team ↓ can see →')), roles.map((r) => el('th', {}, teamLabel(r).replace('Install coordinators', 'Install coord.'))))),
+      el('tbody', {}, viewers.map((v) => el('tr', {},
+        el('th', { scope: 'row' }, teamLabel(v)),
+        roles.map((r) => {
+          const own = r === v;
+          const box = el('input', { type: 'checkbox', checked: own || allowed(v).includes(r), disabled: own, 'aria-label': `${teamLabel(v)} can see ${teamLabel(r)} activities` });
+          box.addEventListener('change', () => {
+            const set = new Set(allowed(v)); set.add(v);
+            if (box.checked) set.add(r); else set.delete(r);
+            rules[v] = roles.filter((x) => set.has(x));
+            saveRules(`${teamLabel(v)} ${box.checked ? 'can now' : 'can no longer'} see ${teamLabel(r)}’ activities`);
+          });
+          return el('td', {}, el('label', { class: 'acc-box' + (own ? ' own' : '') }, box, el('i')));
+        }))))));
+    const presetBtn = (label, fn) => el('button', { class: 'btn sm', type: 'button', onclick: () => { fn(); saveRules(); render(); } }, label);
+    const access = el('section', { class: 'card reveal' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'Who sees whose activities')),
+      el('p', { class: 'hint', style: 'margin:0 0 12px' }, 'Check a box to let a team see another team’s activities. Everyone always sees their own, and Admins see everything. Each activity can also be narrowed further with its own “Visible to” setting.'),
+      matrix,
+      el('div', { class: 'actions-row', style: 'margin-top:14px' },
+        presetBtn('Everyone sees everything', () => { Object.keys(rules).forEach((k) => delete rules[k]); }),
+        presetBtn('Each team sees only its own', () => { viewers.forEach((v) => { rules[v] = [v]; }); })));
+
+    const defSel = el('select', { class: 'select', id: 'acc_def' },
+      [['all', 'Everyone (who has access)'], ...roles.map((r) => ['team:' + r, `${teamLabel(r)} only`]), ['private', 'Private (just the rep)']].map(([v, l]) => el('option', { value: v, selected: actDefault() === v }, l)));
+    defSel.addEventListener('change', () => { settings.actDefault = defSel.value; saveSettings(); toast('Default saved'); });
+    const defaults = el('section', { class: 'card reveal' },
+      el('div', { class: 'card-head' }, el('h2', { class: 'card-title' }, 'New activities')),
+      el('label', { class: 'field' }, el('span', {}, 'New activities are visible to'), defSel));
+
+    const caveat = el('p', { class: 'hint reveal', style: 'margin:0' }, 'Note: until each person signs in with their own login, these rules control what the app shows, not true security. Anyone on the same device can change who they are in Settings.');
+    return el('div', { class: 'access-page' },
+      el('div', { class: 'page-head reveal' }, el('div', {}, el('div', { class: 'eyebrow' }, 'Admin'), el('h1', { class: 'page-title' }, 'Teams & access'),
+        el('p', { class: 'page-sub' }, 'Set up teams and choose which teams can see each other’s activities.'))),
+      access, teams, defaults, caveat);
+  }
 
   // ---------------------------------------------------------------------
   // New table builder
