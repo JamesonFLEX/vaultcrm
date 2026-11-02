@@ -4,15 +4,16 @@
  * cache in the background (stale-while-revalidate). New deploys show up on the
  * next visit. API calls (server mode) are never cached.
  */
-const CACHE = 'vault-shell-v9';
+const CACHE = 'vault-shell-v10';
 const SHELL = [
-  './', 'index.html', 'app.css', 'app.js', 'local-engine.js',
+  './', 'index.html', 'app.css?v=10', 'app.js?v=10', 'local-engine.js?v=10',
   'img/vault-logo.svg', 'img/marble-dark.webp', 'img/marble-light.webp'
 ];
 
 self.addEventListener('install', (e) => {
   self.skipWaiting();
-  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)).catch(() => {}));
+  // cache: 'reload' skips the browser's HTTP cache so the shell is always one matching set
+  e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: 'reload' })))).catch(() => {}));
 });
 
 self.addEventListener('activate', (e) => {
@@ -38,7 +39,7 @@ self.addEventListener('fetch', (e) => {
       const cached = await cache.match(req, { ignoreSearch: sameOrigin && req.mode === 'navigate' });
       const network = fetch(req)
         .then((res) => {
-          if (res && (res.ok || res.type === 'opaque')) cache.put(req, res.clone());
+          if (res && (res.ok || res.type === 'opaque') && !(sameOrigin && req.mode !== 'navigate' && !url.search && /\.(js|css)$/.test(url.pathname))) cache.put(req, res.clone());
           return res;
         })
         .catch(() => cached);

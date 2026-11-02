@@ -439,6 +439,7 @@
   }
 
   const api = {
+    version: 10,
     request, exportData, importData,
     validateSchemaDef, mergeSchema, sanitizePayload, coerce, parseType, isUuid, HttpError,
     _reset: () => { state = emptyState(); loading = Promise.resolve(); }

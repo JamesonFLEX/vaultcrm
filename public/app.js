@@ -1652,12 +1652,14 @@
       ids[ref] = r.record.id;
       (made[key] = made[key] || []).push(r.record.id);
     }
-    if (!only) await loadVolumeSample(ids, made);
+    let failure = null;
+    if (!only) { try { await loadVolumeSample(ids, made); } catch (e) { failure = e; } }
     const prev = settings.sampleIds || {};
     for (const [k, v] of Object.entries(made)) prev[k] = (prev[k] || []).concat(v);
     settings.sampleIds = prev;
-    if (!only) settings.sampleVersion = SAMPLE_VERSION;
+    if (!only && !failure) settings.sampleVersion = SAMPLE_VERSION;
     saveSettings();
+    if (failure) { Object.keys(cache).forEach((k) => delete cache[k]); throw failure; }
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
 
@@ -1716,7 +1718,13 @@
       phone: `916-555-${String(between(1000, 9999))}`, utility: util(j.city), avg_monthly_bill: between(140, 520),
       roof_type: pick(['Composition shingle', 'Composition shingle', 'Tile', 'Metal']), roof_age: between(1, 22), shade: pick(['None', 'None', 'Some', 'Heavy']), hoa: rnd() < 0.2 })));
     jobs.forEach((j, i) => { j.home = homeIds[i]; });
-    await bulk('locations', jobs.map((j) => ({ location_name: `${j.name.split(' ')[1]} home`, company: j.home, address: `${between(100, 9900)} ${pick(STREETS)}`, city: j.city[0], state: 'CA', zip: j.city[1] })));
+    const propIds = await bulk('locations', jobs.map((j) => ({ location_name: `${j.name.split(' ')[1]} home`, company: j.home, address: `${between(100, 9900)} ${pick(STREETS)}`, city: j.city[0], state: 'CA', zip: j.city[1] })));
+    const contactIds = await bulk('contacts', jobs.map((j, i) => {
+      const [first, last] = j.name.split(' ');
+      return { first_name: first, last_name: last, company: j.home, location: propIds[i], job_title: 'Homeowner', decision_maker: true,
+        email: `${first.toLowerCase()}.${last.toLowerCase()}@example.com`, phone: `916-555-${String(between(1000, 9999))}` };
+    }));
+    jobs.forEach((j, i) => { j.contact = contactIds[i]; });
 
     const NEXT = { 'New lead': ['First call', 'Knock again this weekend', 'Text intro + ask for a bill'], 'Follow-up': ['Call back after 6pm', 'Get both decision-makers home', 'Waiting on utility bill'],
       'Appointment set': ['Kitchen-table appointment', 'Bring 12 months of bills', 'Review roof + shade'], 'Proposal sent': ['Walk through proposal', 'Answer battery questions', 'Compare PPA vs lease'],
@@ -1725,7 +1733,7 @@
     const dealIds = await bulk('deals', dealJobs.map((j) => {
       const closed = j.stage === 'Sold' || j.stage === 'Lost';
       return Object.assign({ deal_name: `${j.name.split(' ')[1]} — ${j.kw} kW`, stage: j.stage, value: j.value, system_size_kw: j.kw, financing: j.fin, battery: j.battery,
-        company: j.home, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
+        company: j.home, contact: j.contact, owner: pick(reps), source: pick(['Door knock', 'Door knock', 'Door knock', 'Referral', 'Flyer', 'Website', 'Cold call', 'Event']), next_step: pick(NEXT[j.stage]) },
         closed ? { close_date: day(-between(0, 25)) } : { follow_up: day(between(-6, 12)) });
     }));
     dealJobs.forEach((j, i) => { j.id = dealIds[i]; });
@@ -1771,6 +1779,32 @@
     }));
   }
 
+  // Sample records left behind by an interrupted load: the pinned "Sample data" note is the tell-tale
+  async function strayedSample() {
+    try {
+      const notes = await load(byKey.notepad, true);
+      return notes.some((r) => r.payload.title === 'Sample data' && /fictional placeholder/i.test(r.payload.body || ''));
+    } catch (_) { return false; }
+  }
+  async function removeStraySample() {
+    const set = sampleSet();
+    for (const key of SPEC.map((x) => x.key).reverse()) {
+      const spec = byKey[key];
+      if (!spec) continue;
+      const titles = new Set(set.filter(([k]) => k === key).map(([, , p]) => (spec.title ? spec.title(p) : '') || '').filter(Boolean));
+      if (!titles.size) continue;
+      const recs = await load(spec, true);
+      const ids = recs.filter((r) => titles.has(titleOf(spec, r))).map((r) => r.id);
+      for (let i = 0; i < ids.length; i += 2000) await api('POST', '/api/vault/bulk-delete', { registry_id: spec.reg.id, ids: ids.slice(i, i + 2000) });
+    }
+    Object.keys(cache).forEach((k) => delete cache[k]);
+  }
+  async function resetSample() {
+    await removeSampleData();
+    await removeStraySample();
+    await loadSampleData();
+  }
+
   async function removeSampleData() {
     const all = settings.sampleIds || {};
     // Delete records that point at others first (reverse of creation order)
@@ -1788,7 +1822,7 @@
     Object.keys(cache).forEach((k) => delete cache[k]);
   }
   const hasSample = () => Object.values(settings.sampleIds || {}).some((a) => a.length);
-  const SAMPLE_VERSION = 6;
+  const SAMPLE_VERSION = 7;
 
   // ---------------------------------------------------------------------
   // New table builder
@@ -1920,9 +1954,10 @@
         el('div', { class: 'wide field' }, el('span', {}, 'Sample data'),
           el('p', { class: 'hint', style: 'margin:0' }, hasSample()
             ? 'Fictional placeholder records are loaded. Remove them before importing real data. Records you added yourself stay.'
-            : 'Fill every tab with fictional homeowners, solar deals, installs, appointments and notes to try things out.'),
+            : 'Fill every tab with fictional homeowners: about 30 jobs in every sales stage and project step, a 9-person team, appointments and chats.'),
           el('div', { class: 'actions-row' }, hasSample()
-            ? el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')
+            ? [el('button', { class: 'btn', type: 'button', onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.lastChild.textContent = 'Reloading…'; try { await resetSample(); closeDrawer(); toast('Sample data reloaded'); await render(); refreshCounts(); } catch (er) { toast(er.message, true); b.disabled = false; } } }, icon('upload'), 'Reload full sample'),
+               el('button', { class: 'btn danger', type: 'button', onclick: (e) => runSample(e.currentTarget, false) }, icon('trash'), 'Remove sample data')]
             : el('button', { class: 'btn', type: 'button', onclick: (e) => runSample(e.currentTarget, true) }, icon('plus'), 'Load sample data'))),
         backup),
       el('div', { class: 'drawer-foot' }, el('span', { class: 'spacer' }), el('button', { class: 'btn ghost', onclick: closeDrawer }, 'Cancel'), saveBtn));
@@ -2317,8 +2352,8 @@
     return el('footer', { class: 'page-foot' },
       el('div', { class: 'pf-brand' }, el('img', { src: 'img/vault-logo.svg', width: 22, height: 22, alt: '' }), el('span', {}, 'VaultCRM')),
       el('div', { class: 'pf-actions' },
-        el('button', { class: 'btn sm', type: 'button', onclick: () => openImport(target) }, icon('upload'), 'Import from CSV'),
-        spec && spec.key !== 'feed' ? el('button', { class: 'btn ghost sm', type: 'button', onclick: () => exportCSV(spec) }, icon('download'), 'Export CSV') : null));
+        el('button', { class: 'btn', type: 'button', onclick: () => openImport(target) }, icon('upload'), el('span', {}, 'Import CSV')),
+        el('button', { class: 'btn', type: 'button', onclick: () => (spec && spec.key !== 'feed' ? exportCSV(spec) : exportBackup()) }, icon('download'), el('span', {}, spec && spec.key !== 'feed' ? 'Export CSV' : 'Backup'))));
   }
 
   // ---------------------------------------------------------------------
@@ -2418,6 +2453,15 @@
   }
 
   async function boot() {
+    if (LOCAL && !(window.VaultLocal && VaultLocal.version >= 10)) {
+      // An older cached engine came with this newer app: fetch the matching set once
+      let tried = false; try { tried = sessionStorage.getItem('vault_heal') === '1'; sessionStorage.setItem('vault_heal', '1'); } catch (_) {}
+      if (!tried) {
+        try { if ('caches' in window) for (const k of await caches.keys()) await caches.delete(k); } catch (_) {}
+        location.replace(location.pathname + '?r=' + Date.now() + location.hash);
+        return;
+      }
+    }
     wireChrome();
     wireMotion();
     applyTheme();
@@ -2434,9 +2478,10 @@
       pill.className = 'mode-pill on';
       pill.title = LOCAL ? 'Data is saved in this browser on this device' : 'Connected to the server';
       await bootstrap();
-      if (hasSample() && settings.sampleVersion !== SAMPLE_VERSION) {
-        // Older sample records (message-on-hold era) → current solar homeowners. Records you added stay.
-        try { await removeSampleData(); await loadSampleData(); toast('Sample data updated to solar homeowners'); } catch (e) { console.warn('Sample refresh failed', e.message); }
+      if (settings.sampleVersion !== SAMPLE_VERSION && (hasSample() || await strayedSample())) {
+        // Older or half-loaded sample records → the current full sample. Records you added stay.
+        try { await resetSample(); toast('Sample data loaded: ~30 jobs in every stage'); }
+        catch (e) { console.warn('Sample refresh failed', e.message); toast('Couldn’t finish loading sample data. Open Settings → Sample data to retry.', true); }
       }
       await render();
       if (!settings.welcomed) openSettings(true);
